@@ -19,13 +19,13 @@ import shap
 import requests as http_requests
 
 # Import access control system
-from api.access_control import (
+from access_control import (
     Role, Purpose, DataType, AccessRequest, AccessDecision,
     check_access, get_allowed_purposes, get_allowed_data_types
 )
 
 # Import authentication utilities
-from api.auth import (
+from auth import (
     hash_password, verify_password, create_access_token,
     verify_access_token, generate_verification_token,
     validate_password_strength, encrypt_sensitive_data,
@@ -33,14 +33,14 @@ from api.auth import (
 )
 
 # Import email service
-from api.email_service import (
+from email_service import (
     send_password_reset_email,
     send_account_activation_email,
     send_security_alert_email
 )
 
 # Import 2FA utilities
-from api.two_factor import (
+from two_factor import (
     generate_2fa_secret,
     generate_qr_code,
     verify_2fa_token,
@@ -52,11 +52,11 @@ from api.two_factor import (
 # Import GLM-4.5V cloud client (replaces Qwen/Ollama)
 from dotenv import load_dotenv
 load_dotenv()
-from api.cloud_models import BioTekCloudClient
+from cloud_models import BioTekCloudClient
 glm_client = BioTekCloudClient()
 
 # Import reporting utilities
-from api.reporting import (
+from reporting import (
     get_system_overview,
     get_activity_by_role,
     get_activity_by_purpose,
@@ -68,7 +68,7 @@ from api.reporting import (
 )
 
 # Import data exchange utilities
-from api.data_exchange import (
+from data_exchange import (
     create_exchange_id,
     encrypt_data_for_exchange,
     decrypt_received_data,
@@ -79,7 +79,7 @@ from api.data_exchange import (
 )
 
 # Import patient data export utilities
-from api.patient_data_export import (
+from patient_data_export import (
     generate_share_token,
     create_patient_data_package,
     export_as_json,
@@ -89,14 +89,14 @@ from api.patient_data_export import (
 )
 
 # Import federated learning utilities
-from api.federated_learning import (
+from federated_learning import (
     simulate_federated_training,
     evaluate_federated_vs_centralized,
     FederatedCoordinator
 )
 
 # Import genomic PRS utilities
-from api.genomic_prs import (
+from genomic_prs import (
     GenomicRiskCalculator,
     combine_genetic_and_clinical_risk,
     parse_23andme_file
@@ -104,7 +104,7 @@ from api.genomic_prs import (
 
 # Import cloud model endpoints (Evo 2 + GLM-4.5V)
 try:
-    from api.cloud_endpoints import router as cloud_router
+    from cloud_endpoints import router as cloud_router
     CLOUD_MODELS_AVAILABLE = True
 except ImportError:
     CLOUD_MODELS_AVAILABLE = False
@@ -115,10 +115,19 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Health check endpoint for Railway
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "biotek-api"}
+
+@app.get("/")
+async def root():
+    return {"message": "BioTeK API is running", "docs": "/docs"}
+
 # CORS middleware for Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001", "https://biotek-aj3eojm6x-azizalmulla16-gmailcoms-projects.vercel.app", "https://*.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1144,7 +1153,7 @@ async def get_purposes_for_role(role: Role):
 @app.get("/auth/access-matrix")
 async def get_access_matrix():
     """Get complete access control matrix"""
-    from api.access_control import ACCESS_POLICIES
+    from access_control import ACCESS_POLICIES
     
     matrix = {}
     for (role, purpose), data_types in ACCESS_POLICIES.items():
@@ -3754,8 +3763,8 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
     - Gail Model (breast cancer)
     - CAIDE (Alzheimer's)
     """
-    from api.clinical_calculators import PatientData, calculate_all_risks
-    from api.clinical_utils import validate_inputs
+    from clinical_calculators import PatientData, calculate_all_risks
+    from clinical_utils import validate_inputs
     
     # PROCESS INPUT: Track provided vs imputed fields
     data_quality = process_patient_data(patient)
@@ -3981,7 +3990,7 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
                 ml_risk = None
         
         # Import hospital-grade clinical utilities
-        from api.clinical_utils import (
+        from clinical_utils import (
             get_ml_weight, get_risk_category_score2, calibrate_probability,
             get_recommendations
         )
@@ -4969,7 +4978,7 @@ async def get_causal_graph():
 # SMART on FHIR and CDS Hooks for Epic, Cerner, etc.
 # =============================================================================
 
-from api.fhir_integration import (
+from fhir_integration import (
     fhir_bundle_to_patient, patient_data_to_api_input,
     CDS_HOOKS_DISCOVERY, create_cds_response, SMART_APP_CONFIG
 )
@@ -5035,7 +5044,7 @@ async def cds_hooks_risk_assessment(request: Dict):
         patient = MultiDiseaseInput(**api_input)
         
         # Call the prediction logic directly
-        from api.clinical_calculators import PatientData, calculate_all_risks
+        from clinical_calculators import PatientData, calculate_all_risks
         data_quality = process_patient_data(patient)
         
         # Simplified prediction for CDS response
@@ -5157,7 +5166,7 @@ async def smart_well_known():
 
 # Try to load AutoGluon predictor
 try:
-    from api.autogluon_predictor import predict_with_autogluon
+    from autogluon_predictor import predict_with_autogluon
     AUTOGLUON_AVAILABLE = True
 except ImportError:
     AUTOGLUON_AVAILABLE = False
