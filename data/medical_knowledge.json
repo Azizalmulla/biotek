@@ -1,0 +1,84 @@
+[
+  {
+    "feature": "hba1c",
+    "name": "Glycated Hemoglobin (HbA1c)",
+    "description": "HbA1c measures average blood glucose levels over 2-3 months. It reflects metabolic health and is a key biomarker for chronic disease risk.",
+    "risk_interpretation": {
+      "low": "HbA1c below 5.7% indicates healthy glucose metabolism and lower chronic disease risk.",
+      "medium": "HbA1c between 5.7-6.4% indicates metabolic dysfunction. Lifestyle modifications recommended.",
+      "high": "HbA1c above 6.5% indicates significant metabolic stress. Associated with increased risk of cardiovascular, kidney, and neurological diseases."
+    },
+    "clinical_significance": "Elevated HbA1c is a strong predictor of multiple chronic diseases including cardiovascular disease, kidney disease, certain cancers, and cognitive decline. Every 1% increase is associated with 18% increased chronic disease risk.",
+    "interventions": "Dietary changes, exercise, weight loss, medication as needed"
+  },
+  {
+    "feature": "ldl",
+    "name": "Low-Density Lipoprotein (LDL) Cholesterol",
+    "description": "LDL cholesterol is often called 'bad cholesterol' because high levels lead to plaque buildup in arteries.",
+    "risk_interpretation": {
+      "low": "LDL below 100 mg/dL is optimal and associated with low cardiovascular risk.",
+      "medium": "LDL 100-159 mg/dL indicates borderline to moderately elevated risk. Lifestyle changes recommended.",
+      "high": "LDL above 160 mg/dL indicates high risk of heart attack and stroke. Statin therapy often indicated."
+    },
+    "clinical_significance": "LDL cholesterol is a primary target for cardiovascular disease prevention. Reducing LDL by 40 mg/dL reduces cardiovascular events by approximately 20%.",
+    "interventions": "Statins, PCSK9 inhibitors, dietary changes, exercise, weight management"
+  },
+  {
+    "feature": "bmi",
+    "name": "Body Mass Index (BMI)",
+    "description": "BMI is a measure of body fat based on height and weight. It's used to screen for weight categories that may lead to health problems.",
+    "risk_interpretation": {
+      "low": "BMI 18.5-24.9 is considered normal weight with lowest chronic disease risk.",
+      "medium": "BMI 25-29.9 indicates overweight status. Moderate increased risk of chronic diseases.",
+      "high": "BMI above 30 indicates obesity. Significantly elevated risk of cardiovascular disease, metabolic disorders, certain cancers, and reduced longevity."
+    },
+    "clinical_significance": "Obesity is associated with chronic inflammation, metabolic dysfunction, and increased risk of multiple diseases. BMI above 30 significantly increases all-cause mortality risk.",
+    "interventions": "Caloric restriction, exercise programs, behavioral therapy, GLP-1 agonists, bariatric surgery for severe obesity"
+  },
+  {
+    "feature": "age",
+    "name": "Age",
+    "description": "Age is a non-modifiable risk factor. Chronic disease risk increases with age due to cumulative exposure and biological aging.",
+    "risk_interpretation": {
+      "low": "Under 40 years: Lower baseline risk, but genetic and lifestyle factors still important.",
+      "medium": "40-60 years: Progressive increase in risk. Screening and prevention critical.",
+      "high": "Over 60 years: Highest risk group. Regular monitoring and management essential."
+    },
+    "clinical_significance": "Age-related increase in disease risk reflects accumulated damage, cellular senescence, and reduced organ reserve. Risk doubles approximately every decade after age 40.",
+    "interventions": "Regular screening, preventive care, healthy lifestyle maintenance, medication adherence"
+  },
+  {
+    "feature": "prs",
+    "name": "Polygenic Risk Score (PRS)",
+    "description": "PRS aggregates the effects of many genetic variants to estimate inherited susceptibility to chronic diseases. It captures the cumulative effect of thousands of genetic markers.",
+    "risk_interpretation": {
+      "low": "PRS below -1.0 indicates below-average genetic predisposition. Lifestyle factors become more important.",
+      "medium": "PRS between -1.0 and +1.0 indicates average genetic risk.",
+      "high": "PRS above +1.0 indicates elevated genetic susceptibility. More aggressive prevention strategies may be warranted."
+    },
+    "clinical_significance": "High PRS identifies individuals who may benefit most from early screening and proactive risk management. Individuals in the top 10% of PRS may have 2-3x higher disease risk than average.",
+    "interventions": "Enhanced screening protocols, early lifestyle interventions, consideration of preventive medications, genetic counseling"
+  },
+  {
+    "feature": "smoking",
+    "name": "Smoking Status",
+    "description": "Smoking is one of the most significant modifiable risk factors for cardiovascular disease, cancer, and chronic lung disease.",
+    "risk_interpretation": {
+      "non_smoker": "Non-smokers have baseline risk. Avoid starting and limit secondhand smoke exposure.",
+      "current_smoker": "Current smoking increases cardiovascular disease risk by 2-4 times and cancer risk significantly. Immediate cessation beneficial."
+    },
+    "clinical_significance": "Smoking causes endothelial dysfunction, accelerates atherosclerosis, and promotes thrombosis. Even light smoking (1-4 cigarettes/day) substantially increases risk. Quitting at any age provides benefits.",
+    "interventions": "Nicotine replacement therapy, varenicline, bupropion, behavioral counseling, support groups"
+  },
+  {
+    "feature": "sex",
+    "name": "Biological Sex",
+    "description": "Biological sex influences disease risk through hormonal, genetic, and physiological differences.",
+    "risk_interpretation": {
+      "male": "Males generally have higher cardiovascular disease risk at younger ages. Increased risk of early heart attacks.",
+      "female": "Females have lower risk before menopause due to protective effects of estrogen. Risk increases post-menopause."
+    },
+    "clinical_significance": "Sex differences in disease presentation, progression, and treatment response require personalized approaches. Hormonal status particularly important in females.",
+    "interventions": "Sex-specific screening guidelines, consideration of hormone therapy, tailored lifestyle recommendations"
+  }
+]
