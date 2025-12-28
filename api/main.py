@@ -724,9 +724,33 @@ def init_database():
         )
     """)
     
+    # Create demo accounts if they don't exist
+    demo_password_hash = hash_password("demo123")
+    demo_accounts = [
+        ("doctor_DOC001", "doctor@biotek.demo", demo_password_hash, "doctor", "Dr. Demo Doctor", "EMP001", "Cardiology"),
+        ("nurse_NUR001", "nurse@biotek.demo", demo_password_hash, "nurse", "Demo Nurse", "EMP002", "Emergency"),
+        ("researcher_RES001", "researcher@biotek.demo", demo_password_hash, "researcher", "Demo Researcher", "EMP003", "Research"),
+    ]
+    
+    for user_id, email, pwd_hash, role, full_name, emp_id, dept in demo_accounts:
+        cursor.execute("""
+            INSERT OR IGNORE INTO staff_accounts 
+            (user_id, email, password_hash, role, full_name, employee_id, department, created_at, created_by, activated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        """, (user_id, email, pwd_hash, role, full_name, emp_id, dept, datetime.now().isoformat(), "system"))
+    
+    # Create demo admin
+    admin_password_hash = hash_password("admin123")
+    cursor.execute("""
+        INSERT OR IGNORE INTO admin_accounts 
+        (admin_id, email, password_hash, full_name, created_at, super_admin)
+        VALUES (?, ?, ?, ?, ?, 1)
+    """, ("admin_ADM001", "admin@biotek.demo", admin_password_hash, "Demo Admin", datetime.now().isoformat()))
+    
     conn.commit()
     conn.close()
     print("✓ Audit database initialized with access control")
+    print("✓ Demo accounts created (password: demo123, admin: admin123)")
 
 
 # ============ Access Control Models ============
