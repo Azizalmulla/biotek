@@ -19,5 +19,5 @@ python-jose[cryptography]==3.3.0
 pyotp==2.9.0
 qrcode[pil]==7.4.2
 pillow==10.2.0
-# ML explainability
-shap==0.44.1
+# ML explainability (optional - not needed for cloud deployment)
+# shap==0.44.1

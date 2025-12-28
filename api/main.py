@@ -15,8 +15,15 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import pickle
 import numpy as np
-import shap
 import requests as http_requests
+
+# SHAP is optional - heavy dependency not needed for cloud deployment
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except ImportError:
+    shap = None
+    SHAP_AVAILABLE = False
 
 # Import access control system
 from access_control import (
@@ -341,12 +348,14 @@ async def load_model():
         print(f"  Accuracy: {model_metadata['accuracy']:.1%}")
         print(f"  Features: {', '.join(feature_names)}")
         
-        # Initialize SHAP explainer
-        print("  Initializing SHAP explainer...")
-        # Use a small background dataset for SHAP
-        background_data = np.random.randn(100, len(feature_names))
-        shap_explainer = shap.TreeExplainer(model)
-        print("✓ SHAP explainer initialized")
+        # Initialize SHAP explainer if available
+        if SHAP_AVAILABLE and shap is not None:
+            print("  Initializing SHAP explainer...")
+            background_data = np.random.randn(100, len(feature_names))
+            shap_explainer = shap.TreeExplainer(model)
+            print("✓ SHAP explainer initialized")
+        else:
+            print("  ⚠️ SHAP not available - skipping explainer")
         
         # Load REAL trained disease models (XGBoost + LightGBM)
         print("\n📊 Loading Real Disease Models...")
