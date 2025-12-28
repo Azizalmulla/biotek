@@ -15,7 +15,7 @@ import MedicalImagingUpload from '@/components/MedicalImagingUpload';
 import MultiDiseaseRisk from '@/components/MultiDiseaseRisk';
 import AdvancedMedicalImaging from '@/components/AdvancedMedicalImaging';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://biotek-production.up.railway.app';
 
 export default function PlatformPage() {
   const router = useRouter();
