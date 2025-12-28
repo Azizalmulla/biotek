@@ -392,8 +392,9 @@ async def load_model():
         init_database()
         
     except Exception as e:
-        print(f"❌ Error loading model: {e}")
-        raise
+        print(f"⚠️ Model loading skipped (running in cloud mode): {e}")
+        # Don't raise - app can still work with cloud APIs
+        init_database()
 
 
 def init_database():
