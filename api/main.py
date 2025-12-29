@@ -1059,6 +1059,75 @@ class AuditLog(BaseModel):
 
 # ============ Helper Functions ============
 
+def enforce_access_control(
+    user_id: str,
+    user_role: str,
+    purpose: str,
+    data_type: str,
+    patient_id: Optional[str] = None
+) -> bool:
+    """
+    ENFORCE access control - actually blocks unauthorized access
+    Returns True if access granted, raises HTTPException if denied
+    """
+    # Map string role to Role enum
+    try:
+        role_enum = Role(user_role.lower()) if user_role else Role.PATIENT
+    except ValueError:
+        role_enum = Role.PATIENT
+    
+    # Map string purpose to Purpose enum
+    try:
+        purpose_enum = Purpose(purpose.lower()) if purpose else Purpose.TREATMENT
+    except ValueError:
+        purpose_enum = Purpose.TREATMENT
+    
+    # Map data type string to DataType enum
+    data_type_map = {
+        "patient_predictions": DataType.PREDICTIONS,
+        "patient_history": DataType.CLINICAL,
+        "genetic_variant": DataType.GENETIC,
+        "medical_imaging": DataType.CLINICAL,
+        "treatment_protocol": DataType.CLINICAL,
+        "clinical_reasoning": DataType.CLINICAL,
+        "demographics": DataType.DEMOGRAPHICS,
+        "audit_logs": DataType.AUDIT_LOGS,
+    }
+    data_type_enum = data_type_map.get(data_type, DataType.CLINICAL)
+    
+    # Create access request
+    access_request = AccessRequest(
+        user_id=user_id or "unknown",
+        role=role_enum,
+        purpose=purpose_enum,
+        data_type=data_type_enum,
+        patient_id=patient_id
+    )
+    
+    # Check access using the access control matrix
+    decision = check_access(access_request)
+    
+    # Log the attempt (granted or denied)
+    log_access_attempt(
+        user_id=user_id or "unknown",
+        role=user_role or "unknown",
+        purpose=purpose,
+        data_type=data_type,
+        patient_id=patient_id,
+        granted=decision.granted,
+        reason=decision.reason
+    )
+    
+    # If denied, raise exception
+    if not decision.granted:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Access denied: {decision.reason}"
+        )
+    
+    return True
+
+
 def log_access_attempt(
     user_id: str,
     role: str,
@@ -6217,15 +6286,13 @@ async def get_patient_prediction_results(
 ):
     """Load saved prediction results for a patient"""
     try:
-        # AUDIT LOG: Track who is accessing patient prediction data
-        log_access_attempt(
-            user_id=user_id or "unknown",
-            role=user_role or "unknown",
+        # ENFORCE ACCESS CONTROL - blocks unauthorized access
+        enforce_access_control(
+            user_id=user_id,
+            user_role=user_role,
             purpose="treatment",
             data_type="patient_predictions",
-            patient_id=patient_id,
-            granted=True,
-            reason="Retrieved patient prediction results"
+            patient_id=patient_id
         )
         
         ph = get_placeholder()
@@ -6261,6 +6328,15 @@ async def save_patient_variant_result(
 ):
     """Save variant analysis result for a patient"""
     try:
+        # ENFORCE ACCESS CONTROL - only doctors can save genetic data
+        enforce_access_control(
+            user_id=user_id,
+            user_role=user_role,
+            purpose="treatment",
+            data_type="genetic_variant",
+            patient_id=patient_id
+        )
+        
         ph = get_placeholder()
         query = f"""
             INSERT INTO patient_variant_results 
@@ -6278,17 +6354,6 @@ async def save_patient_variant_result(
             json.dumps(result_data)
         ))
         
-        # AUDIT LOG: Track who saved variant data to patient record
-        log_access_attempt(
-            user_id=user_id or "doctor_session",
-            role=user_role or "doctor",
-            purpose="diagnosis",
-            data_type="genetic_variant",
-            patient_id=patient_id,
-            granted=True,
-            reason=f"Saved variant analysis: {result_data.get('variant', 'unknown')}"
-        )
-        
         return {"status": "saved", "patient_id": patient_id, "type": "variant"}
         
     except Exception as e:
@@ -6304,6 +6369,15 @@ async def save_patient_imaging_result(
 ):
     """Save imaging analysis result for a patient"""
     try:
+        # ENFORCE ACCESS CONTROL - only doctors/nurses can save imaging data
+        enforce_access_control(
+            user_id=user_id,
+            user_role=user_role,
+            purpose="treatment",
+            data_type="medical_imaging",
+            patient_id=patient_id
+        )
+        
         ph = get_placeholder()
         query = f"""
             INSERT INTO patient_imaging_results 
@@ -6318,17 +6392,6 @@ async def save_patient_imaging_result(
             result_data.get('finding_summary', ''),
             json.dumps(result_data)
         ))
-        
-        # AUDIT LOG: Track who saved imaging data to patient record
-        log_access_attempt(
-            user_id=user_id or "doctor_session",
-            role=user_role or "doctor",
-            purpose="diagnosis",
-            data_type="medical_imaging",
-            patient_id=patient_id,
-            granted=True,
-            reason=f"Saved imaging analysis: {result_data.get('image_type', 'unknown')}"
-        )
         
         return {"status": "saved", "patient_id": patient_id, "type": "imaging"}
         
@@ -6345,6 +6408,15 @@ async def save_patient_treatment(
 ):
     """Save treatment protocol for a patient"""
     try:
+        # ENFORCE ACCESS CONTROL - only doctors can save treatment protocols
+        enforce_access_control(
+            user_id=user_id,
+            user_role=user_role,
+            purpose="treatment",
+            data_type="treatment_protocol",
+            patient_id=patient_id
+        )
+        
         ph = get_placeholder()
         query = f"""
             INSERT INTO patient_treatments 
@@ -6359,17 +6431,6 @@ async def save_patient_treatment(
             result_data.get('protocol_summary', ''),
             json.dumps(result_data)
         ))
-        
-        # AUDIT LOG: Track who saved treatment protocol to patient record
-        log_access_attempt(
-            user_id=user_id or "doctor_session",
-            role=user_role or "doctor",
-            purpose="treatment",
-            data_type="treatment_protocol",
-            patient_id=patient_id,
-            granted=True,
-            reason=f"Saved treatment protocol: {result_data.get('treatment_type', 'general')}"
-        )
         
         return {"status": "saved", "patient_id": patient_id, "type": "treatment"}
         
@@ -6386,6 +6447,15 @@ async def save_patient_clinical_reasoning(
 ):
     """Save clinical reasoning result for a patient"""
     try:
+        # ENFORCE ACCESS CONTROL - only doctors can save clinical reasoning
+        enforce_access_control(
+            user_id=user_id,
+            user_role=user_role,
+            purpose="treatment",
+            data_type="clinical_reasoning",
+            patient_id=patient_id
+        )
+        
         ph = get_placeholder()
         query = f"""
             INSERT INTO patient_clinical_reasoning 
@@ -6399,17 +6469,6 @@ async def save_patient_clinical_reasoning(
             result_data.get('assessment', '')[:200],
             json.dumps(result_data)
         ))
-        
-        # AUDIT LOG: Track who saved clinical reasoning to patient record
-        log_access_attempt(
-            user_id=user_id or "doctor_session",
-            role=user_role or "doctor",
-            purpose="diagnosis",
-            data_type="clinical_reasoning",
-            patient_id=patient_id,
-            granted=True,
-            reason="Saved AI clinical reasoning analysis"
-        )
         
         return {"status": "saved", "patient_id": patient_id, "type": "clinical_reasoning"}
         
@@ -6425,6 +6484,15 @@ async def get_patient_complete_history(
 ):
     """Get complete history of all results for a patient"""
     try:
+        # ENFORCE ACCESS CONTROL - checks role + purpose permissions
+        enforce_access_control(
+            user_id=user_id,
+            user_role=user_role,
+            purpose="treatment",
+            data_type="patient_history",
+            patient_id=patient_id
+        )
+        
         ph = get_placeholder()
         history = {
             "patient_id": patient_id,
@@ -6524,17 +6592,6 @@ async def get_patient_complete_history(
             "has_treatments": len(history["treatments"]) > 0,
             "has_clinical_reasoning": len(history["clinical_reasoning"]) > 0
         }
-        
-        # Log access
-        log_access_attempt(
-            user_id=user_id or "doctor_session",
-            role=user_role or "doctor",
-            purpose="treatment",
-            data_type="patient_history",
-            patient_id=patient_id,
-            granted=True,
-            reason="Retrieved patient complete history"
-        )
         
         return history
         
