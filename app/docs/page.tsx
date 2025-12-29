@@ -69,7 +69,7 @@ export default function DocsPage() {
             <h1 className="text-4xl md:text-5xl font-bold text-black mb-6">Technical Documentation</h1>
             <p className="text-xl text-black/60 leading-relaxed max-w-3xl">
               Comprehensive guide to the BioTeK privacy-preserving multi-disease AI platform. 
-              Featuring 12 disease predictions, 55 clinical biomarkers, and 5 genetic risk panels.
+              Featuring 12 disease predictions, 55 clinical biomarkers, 5 genetic risk panels, Evo 2 DNA analysis, and GLM-4.5V medical vision.
             </p>
             
             {/* Quick Stats */}

@@ -1,20 +1,26 @@
 # BioTeK - Enterprise Disease Risk Prediction Platform
 
-![BioTeK Platform](https://img.shields.io/badge/Status-Production%20Ready-green) ![Accuracy](https://img.shields.io/badge/Accuracy-78%25-blue) ![AUC](https://img.shields.io/badge/AUC-0.871-blue)
+![BioTeK Platform](https://img.shields.io/badge/Status-Production%20Ready-green) ![Accuracy](https://img.shields.io/badge/Accuracy-83%25-blue) ![AUC](https://img.shields.io/badge/AUC-0.890-blue) ![Diseases](https://img.shields.io/badge/Diseases-12-purple)
 
 **Privacy-Preserving AI for Genomic Medicine**
 
-BioTeK is an enterprise-grade clinical decision support system that predicts disease risk using federated learning and differential privacy. Built for healthcare institutions that demand both accuracy and patient privacy.
+BioTeK is an enterprise-grade clinical decision support system that predicts 12 chronic disease risks using XGBoost+LightGBM ensemble models, Evo 2 DNA analysis (NVIDIA NIM), and GLM-4.5V medical vision AI (OpenRouter). Built for healthcare institutions that demand both accuracy and patient privacy.
 
 ---
 
 ## 🎯 Core Features
 
-### Clinical AI Prediction
-- **Random Forest ML Model** - 78% accuracy, 0.871 AUC-ROC
-- **Multi-modal Inputs** - Clinical markers (HbA1c, LDL, BMI) + optional genetic data (PRS)
-- **Real-time Risk Assessment** - Sub-second prediction latency
-- **Explainable AI** - Feature importance visualization for clinical transparency
+### Multi-Disease Prediction
+- **XGBoost + LightGBM Ensemble** - 83% accuracy, 0.890 AUC-ROC across 12 diseases
+- **55 Clinical Biomarkers** - Metabolic, liver, kidney, cardiac, inflammatory, blood panels
+- **5 Polygenic Risk Panels** - 59 GWAS-validated SNPs for genetic risk
+- **Explainable AI** - SHAP TreeExplainer for feature contributions
+
+### Cloud AI Models
+- **Evo 2 DNA Foundation Model** - 40B parameter model via NVIDIA NIM for DNA sequence analysis, variant effect prediction, and gene design
+- **GLM-4.5V Medical Vision** - 106B parameter vision-language model via OpenRouter for X-ray/CT/MRI analysis and clinical document OCR
+- **AI Research Assistant** - Conversational clinical insights powered by GLM-4.5V
+- **AI Treatment Optimizer** - Evidence-based 3-phase treatment protocol generation
 
 ### Privacy & Compliance
 - **Federated Learning Architecture** - Data never leaves hospital premises
@@ -56,27 +62,32 @@ BioTeK is an enterprise-grade clinical decision support system that predicts dis
 
 ## 📊 Technical Specifications
 
-### ML Model
-- **Algorithm**: Random Forest Classifier
-- **Features**: Age, BMI, HbA1c, LDL, Smoking, PRS, Sex
-- **Training Set**: 640 patients (80% split)
-- **Test Accuracy**: 78.0%
-- **AUC-ROC**: 0.871
-- **Precision (High Risk)**: 78%
-- **Recall (High Risk)**: 62%
+### ML Models (v2.0.0)
+- **Algorithm**: XGBoost + LightGBM + Lasso Ensemble
+- **Diseases**: 12 (Diabetes, Heart Disease, Stroke, CKD, NAFLD, Heart Failure, AFib, COPD, Breast Cancer, Colorectal Cancer, Alzheimer's, Hypertension)
+- **Features**: 55 clinical biomarkers + 5 PRS panels
+- **Test Accuracy**: 83%
+- **AUC-ROC**: 0.890
+- **Architecture**: 200 trees per model, weighted ensemble
+
+### Cloud AI
+- **Evo 2**: arc/evo2-40b via NVIDIA NIM (DNA analysis)
+- **GLM-4.5V**: z-ai/glm-4.5v via OpenRouter (Medical vision)
 
 ### Data Pipeline
-- **Synthetic Dataset**: 1000 realistic patient records
-- **Distribution**: 60% low risk, 40% high risk
-- **Federated Nodes**: 3 hospital sites
-- **Feature Engineering**: Standardized clinical + genetic markers
+- **Training Data**: Real medical datasets (UCI, Kaggle, Framingham, CKD, PIMA)
+- **Biomarkers**: 55 clinical features across 11 categories
+- **Genetic Data**: 59 SNPs across 5 PRS panels (metabolic, cardiovascular, cancer, neurological, autoimmune)
+- **Federated Nodes**: 3 hospital sites simulation
+- **Clinical Calculators**: Framingham, UKPDS, QRISK3, CKD-EPI, ASCVD, Gail Model
 
 ### Tech Stack
 - **Frontend**: Next.js 14, TypeScript, Tailwind CSS, Framer Motion
 - **Backend**: FastAPI, Python 3.9+
-- **ML**: scikit-learn, Random Forest
-- **Database**: SQLite (audit logs)
-- **Deployment**: Local dev (production-ready architecture)
+- **ML**: XGBoost, LightGBM, scikit-learn, SHAP
+- **Cloud AI**: NVIDIA NIM (Evo 2), OpenRouter (GLM-4.5V)
+- **Database**: SQLite (audit logs, sessions)
+- **Deployment**: Vercel (frontend), Railway (backend)
 
 ---
 
@@ -134,21 +145,23 @@ npm run dev
 
 ## 📈 Model Performance
 
-### Feature Importance
-| Feature | Contribution |
-|---------|--------------|
-| LDL Cholesterol | 23.5% |
-| HbA1c | 20.3% |
-| Age | 18.6% |
-| Genetic Risk (PRS) | 17.2% |
-| BMI | 13.9% |
-| Smoking | 4.3% |
-| Sex | 2.0% |
+### Diseases Covered
+| Category | Diseases |
+|----------|----------|
+| Metabolic | Type 2 Diabetes, NAFLD, CKD |
+| Cardiovascular | Heart Disease, Hypertension, Stroke, Heart Failure, AFib |
+| Cancer | Breast Cancer, Colorectal Cancer |
+| Neurological | Alzheimer's Disease |
+| Respiratory | COPD |
 
-### Clinical Validation
-- **Sensitivity**: 62% (High Risk detection)
-- **Specificity**: 88% (Low Risk detection)
-- **F1-Score**: 0.77 (weighted average)
+### PRS Panels (59 SNPs)
+| Panel | SNPs | Diseases |
+|-------|------|----------|
+| Metabolic | 12 | T2D, Obesity, NAFLD |
+| Cardiovascular | 12 | CAD, Stroke, AFib, HTN |
+| Cancer | 12 | Breast, Colorectal, Prostate |
+| Neurological | 12 | Alzheimer's, Parkinson's |
+| Autoimmune | 11 | T1D, RA, Lupus, Celiac |
 
 ---
 
@@ -248,18 +261,22 @@ Get model metadata and performance metrics
 
 ## 🛠️ Development Roadmap
 
-- [x] Core ML model training
+- [x] Core ML model training (XGBoost+LightGBM)
 - [x] FastAPI backend
 - [x] Consent management system
 - [x] Clinical dashboard UI
 - [x] Federated learning simulation
 - [x] Audit trail system
-- [ ] Real-time model retraining
-- [ ] SHAP value computation
-- [ ] Multi-disease models
+- [x] SHAP value computation
+- [x] Multi-disease models (12 diseases)
+- [x] Cloud deployment (Vercel + Railway)
+- [x] Evo 2 DNA analysis (NVIDIA NIM)
+- [x] GLM-4.5V Medical Vision (OpenRouter)
+- [x] AI Research Assistant
+- [x] AI Treatment Optimizer
 - [ ] FHIR/HL7 integration
 - [ ] Mobile app
-- [ ] Cloud deployment
+- [ ] Real-time model retraining
 
 ---
 
