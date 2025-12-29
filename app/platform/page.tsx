@@ -673,7 +673,7 @@ export default function PlatformPage() {
                       <span className="text-4xl">🧠</span>
                       <div>
                         <h2 className="text-2xl font-bold text-black">AI Clinical Intelligence</h2>
-                        <p className="text-sm text-black/60">12-Disease Risk Analysis • XGBoost+LightGBM Models • 85% Average Accuracy</p>
+                        <p className="text-sm text-black/60">12-Disease Risk Analysis • XGBoost+LightGBM Models • 83% Average Accuracy</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-4 mt-6">

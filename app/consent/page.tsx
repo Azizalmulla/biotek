@@ -252,11 +252,11 @@ www.biotek.ai
                   <p className="text-black/70">Including genetic data improves accuracy:</p>
                   <div className="grid grid-cols-2 gap-4 mt-4">
                     <div className="bg-white/50 rounded-xl p-4">
-                      <div className="text-2xl font-bold text-black">~78%</div>
+                      <div className="text-2xl font-bold text-black">~83%</div>
                       <div className="text-sm text-black/50">Without genetics</div>
                     </div>
                     <div className="bg-white/50 rounded-xl p-4">
-                      <div className="text-2xl font-bold text-black">~95%</div>
+                      <div className="text-2xl font-bold text-black">~89%</div>
                       <div className="text-sm text-black/50">With genetics</div>
                     </div>
                   </div>
