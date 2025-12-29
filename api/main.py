@@ -152,12 +152,13 @@ app.add_middleware(
 if CLOUD_MODELS_AVAILABLE:
     app.include_router(cloud_router)
 
-# Load model and metadata on startup
-MODEL_PATH = Path("models/lightgbm_model.pkl")
-FEATURES_PATH = Path("models/feature_names.pkl")
-METADATA_PATH = Path("models/model_metadata.pkl")
-DB_PATH = Path("data/audit_log.db")
-KNOWLEDGE_PATH = Path("data/medical_knowledge.json")
+# Load model and metadata on startup - use paths relative to project root
+_PROJECT_ROOT = Path(__file__).parent.parent
+MODEL_PATH = _PROJECT_ROOT / "models/lightgbm_model.pkl"
+FEATURES_PATH = _PROJECT_ROOT / "models/feature_names.pkl"
+METADATA_PATH = _PROJECT_ROOT / "models/model_metadata.pkl"
+DB_PATH = _PROJECT_ROOT / "data/audit_log.db"
+KNOWLEDGE_PATH = _PROJECT_ROOT / "data/medical_knowledge.json"
 
 model = None
 feature_names = None
@@ -175,7 +176,9 @@ LLM_MODEL = "GLM-4.5V"
 LLM_PROVIDER = "OpenRouter"
 
 # Real trained disease models (XGBoost + LightGBM)
-REAL_MODELS_DIR = Path("models")
+# Use absolute path relative to this file's location
+API_DIR = Path(__file__).parent
+REAL_MODELS_DIR = API_DIR.parent / "models"
 real_disease_models = {}
 real_models_metadata = None
 
@@ -4110,12 +4113,14 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
     for disease_id in DISEASE_CONFIG.keys():
         try:
             # Try real models first (trained on UCI/Kaggle real patient data)
-            with open(f'models/real_{disease_id}_model.pkl', 'rb') as f:
+            model_path = REAL_MODELS_DIR / f'real_{disease_id}_model.pkl'
+            with open(model_path, 'rb') as f:
                 ml_models[disease_id] = pickle.load(f)
         except:
             try:
                 # Fallback to unified models
-                with open(f'models/unified_{disease_id}_model.pkl', 'rb') as f:
+                model_path = REAL_MODELS_DIR / f'unified_{disease_id}_model.pkl'
+                with open(model_path, 'rb') as f:
                     ml_models[disease_id] = pickle.load(f)
             except:
                 pass
