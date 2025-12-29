@@ -4193,19 +4193,20 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
         clinical_data = clinical_risks.get(disease_id, {})
         clinical_risk = clinical_data.get("risk_score", 0.05)
         
-        # Get ML prediction from UNIFIED model (all use same 9 features)
+        # Get ML prediction from REAL trained models (XGBoost + LightGBM ensemble)
         ml_risk = None
         if disease_id in ml_models:
             try:
                 model_data = ml_models[disease_id]
+                # RealDiseaseModel has predict_proba method that handles ensemble
+                if hasattr(model_data, 'predict_proba'):
+                    ml_risk = float(model_data.predict_proba(ml_features)[0])
                 # Handle dict format (resaved models)
-                if isinstance(model_data, dict) and 'xgb_model' in model_data:
+                elif isinstance(model_data, dict) and 'xgb_model' in model_data:
                     xgb = model_data['xgb_model']
                     ml_risk = float(xgb.predict_proba(ml_features)[0][1])
-                # Handle object format
-                elif hasattr(model_data, 'xgb_model') and model_data.xgb_model is not None:
-                    ml_risk = float(model_data.xgb_model.predict_proba(ml_features)[0][1])
             except Exception as e:
+                print(f"ML prediction error for {disease_id}: {e}")
                 ml_risk = None
         
         # Import hospital-grade clinical utilities
