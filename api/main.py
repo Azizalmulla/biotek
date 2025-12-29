@@ -3596,6 +3596,20 @@ async def get_sample_genotypes(risk_level: str = "average"):
         raise HTTPException(status_code=500, detail=f"Failed to generate sample genotypes: {str(e)}")
 
 
+@app.get("/debug/paths")
+async def debug_paths():
+    """Debug endpoint to check model paths on Railway"""
+    import os
+    return {
+        "cwd": os.getcwd(),
+        "api_dir": str(API_DIR) if 'API_DIR' in dir() else str(_API_ROOT),
+        "real_models_dir": str(REAL_MODELS_DIR),
+        "models_dir_exists": REAL_MODELS_DIR.exists() if REAL_MODELS_DIR else False,
+        "models_found": list(REAL_MODELS_DIR.glob("real_*.pkl")) if REAL_MODELS_DIR and REAL_MODELS_DIR.exists() else [],
+        "loaded_models": list(real_disease_models.keys()),
+        "dir_contents": os.listdir(REAL_MODELS_DIR) if REAL_MODELS_DIR and REAL_MODELS_DIR.exists() else []
+    }
+
 @app.get("/model/info")
 async def model_info():
     """Get model metadata - XGBoost + LightGBM ensemble trained on REAL data"""
