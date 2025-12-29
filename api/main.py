@@ -4106,13 +4106,19 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
         'smoking', 'family_history'
     ]
     
-    # Load unified models (all use same features!)
+    # Load REAL disease models (trained on actual patient data)
     for disease_id in DISEASE_CONFIG.keys():
         try:
-            with open(f'models/unified_{disease_id}_model.pkl', 'rb') as f:
+            # Try real models first (trained on UCI/Kaggle real patient data)
+            with open(f'models/real_{disease_id}_model.pkl', 'rb') as f:
                 ml_models[disease_id] = pickle.load(f)
         except:
-            pass
+            try:
+                # Fallback to unified models
+                with open(f'models/unified_{disease_id}_model.pkl', 'rb') as f:
+                    ml_models[disease_id] = pickle.load(f)
+            except:
+                pass
     
     # Create feature vector - 13 optimal clinical features (with imputed values)
     ml_features = pd.DataFrame([[

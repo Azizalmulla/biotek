@@ -36,11 +36,14 @@ venv/
 *.db
 data/*.db
 
-# Models (large files)
-models/*.pkl
+# Models (large files - except real_ models needed for production)
+models/unified_*.pkl
+models/lightgbm_model.pkl
 models/*.joblib
 models/autogluon/
 models/multi_disease/
+# Keep real models for deployment:
+# models/real_*.pkl - THESE ARE DEPLOYED
 
 # Large media files
 *.mp4
