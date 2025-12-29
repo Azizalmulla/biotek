@@ -4263,12 +4263,13 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
         recommendation = "Overall favorable risk profile. Continue healthy lifestyle and routine screenings."
     
     # Log access for audit trail
+    patient_id_val = getattr(patient, 'patient_id', None) or f"PAT{abs(hash(str(patient.age) + str(patient.bmi))) % 10000:04d}"
     log_access_attempt(
-        user_id=patient.patient_id or "doctor_session",
+        user_id="doctor_session",
         role="doctor",
         purpose="treatment",
         data_type="clinical_data",
-        patient_id=patient.patient_id,
+        patient_id=patient_id_val,
         granted=True,
         reason=f"Multi-disease risk prediction ({len(high_risk)} high risk)"
     )
@@ -4276,11 +4277,11 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
     # Log prediction for platform audit trail
     top_disease = high_risk[0] if high_risk else (mod_risk[0] if mod_risk else list(predictions.values())[0])
     log_prediction(
-        patient_id=patient.patient_id or "PAT" + str(hash(str(patient.age) + str(patient.bmi)))[-4:],
+        patient_id=patient_id_val,
         input_data=json.dumps({"age": patient.age, "bmi": patient.bmi, "hba1c": patient.hba1c, "bp": patient.bp_systolic}),
         prediction=top_disease["risk_score"],
         risk_category=top_disease["risk_category"],
-        used_genetics=bool(patient.prs_score),
+        used_genetics=bool(getattr(patient, 'prs_cardiovascular', None) or getattr(patient, 'prs_metabolic', None)),
         consent_id=None,
         model_version="MultiDisease-XGBoost-LightGBM-v1.0"
     )

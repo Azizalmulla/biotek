@@ -771,15 +771,18 @@ def apply_sanity_checks(risk: float, disease_id: str, data: dict) -> float:
     # CARDIOVASCULAR SANITY CHECKS
     # ==========================================================================
     
-    # HYPERTENSION: Based on actual BP readings
+    # HYPERTENSION: Based on actual BP readings (this predicts FUTURE hypertension)
+    # Note: If patient already HAS high BP, they already have hypertension
     if disease_id == 'hypertension':
         if bp_sys < 120 and bp_dia < 80:
-            return min(risk, 0.05)  # Normal BP: max 5%
+            return min(risk, 0.05)  # Normal BP: max 5% future risk
         elif bp_sys < 130 and bp_dia < 85:
-            return min(risk, 0.12)  # Elevated: max 12%
+            return min(risk, 0.10)  # Elevated: max 10%
         elif bp_sys < 140 and bp_dia < 90:
-            return min(risk, 0.25)  # Stage 1: max 25%
-        # Stage 2+ can have higher risk
+            return min(risk, 0.18)  # Stage 1: max 18%
+        elif bp_sys < 160 and bp_dia < 100:
+            return min(risk, 0.35)  # Stage 2: higher risk
+        # Stage 2+ (>=160/100): can have high risk
     
     # CORONARY HEART DISEASE: Multiple factor constraints
     if disease_id == 'coronary_heart_disease':
@@ -793,13 +796,31 @@ def apply_sanity_checks(risk: float, disease_id: str, data: dict) -> float:
         if hdl >= 60:
             risk = risk * 0.7  # 30% reduction
     
-    # STROKE: Similar constraints
+    # STROKE: BP is the #1 risk factor (accounts for ~50% of strokes)
     if disease_id == 'stroke':
         is_smoker = smoking > 0 or smoking_pack_years > 0
-        if age < 45 and bp_sys < 130 and not is_smoker:
-            return min(risk, 0.02)  # Very low for young with normal BP
-        elif age < 55 and bp_sys < 140:
-            return min(risk, 0.05)
+        # Age-based base caps (10-year risk from Framingham)
+        if age < 45:
+            if bp_sys < 130 and not is_smoker:
+                return min(risk, 0.01)  # <1% for healthy young
+            return min(risk, 0.03)
+        elif age < 55:
+            if bp_sys < 130 and not is_smoker:
+                return min(risk, 0.02)  # ~2% for healthy 45-55
+            elif bp_sys < 140:
+                return min(risk, 0.05)  # ~5% for elevated BP
+            return min(risk, 0.08)  # Max 8% even with higher BP
+        elif age < 65:
+            if bp_sys < 130 and not is_smoker:
+                return min(risk, 0.04)  # ~4% for healthy 55-65
+            elif bp_sys < 140:
+                return min(risk, 0.08)
+            return min(risk, 0.15)
+        elif age < 75:
+            if bp_sys < 140:
+                return min(risk, 0.10)
+            return min(risk, 0.20)
+        # 75+: higher risk acceptable
         if hdl >= 60:
             risk = risk * 0.75  # 25% reduction for high HDL
     
