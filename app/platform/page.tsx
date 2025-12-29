@@ -165,6 +165,14 @@ export default function PlatformPage() {
     }
   }, [aiMessages, currentPatientId]);
 
+  // Handle sign out
+  const handleSignOut = () => {
+    localStorage.removeItem('biotek_session');
+    localStorage.removeItem('biotek_consent');
+    localStorage.removeItem('biotek_chat_histories');
+    router.push('/login');
+  };
+
   // Save chat to backend database
   const saveChatToBackend = async (patientId: string, messages: any[]) => {
     try {
@@ -554,7 +562,10 @@ export default function PlatformPage() {
               )}
               <div className="h-8 w-px bg-black/10" />
               <span className="text-sm text-black/60">Dr. Smith</span>
-              <button className="bg-black text-white px-4 py-2 rounded-full text-sm hover:bg-black/90 transition-all">
+              <button 
+                onClick={handleSignOut}
+                className="bg-black text-white px-4 py-2 rounded-full text-sm hover:bg-black/90 transition-all"
+              >
                 Sign Out
               </button>
             </div>
