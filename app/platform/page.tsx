@@ -10,7 +10,7 @@ import FeatureImportance from '@/components/FeatureImportance';
 import FederatedStatus from '@/components/FederatedStatus';
 import PurposeSelector from '@/components/PurposeSelector';
 import PatientSelector from '@/components/PatientSelector';
-import DNAAnalysis from '@/components/DNAAnalysis';
+import VariantAnalyzer from '@/components/VariantAnalyzer';
 import MedicalImagingUpload from '@/components/MedicalImagingUpload';
 import MultiDiseaseRisk from '@/components/MultiDiseaseRisk';
 import AdvancedMedicalImaging from '@/components/AdvancedMedicalImaging';
@@ -46,6 +46,9 @@ export default function PlatformPage() {
   const [progression, setProgression] = useState<any>(null);
   const [causalGraph, setCausalGraph] = useState<any>(null);
   const [treatment, setTreatment] = useState<any>(null);
+  const [treatmentLoading, setTreatmentLoading] = useState(false);
+  const [clinicalReasoning, setClinicalReasoning] = useState<any>(null);
+  const [clinicalReasoningLoading, setClinicalReasoningLoading] = useState(false);
   const [aiChatOpen, setAiChatOpen] = useState(false);
   const [aiMessages, setAiMessages] = useState<Array<{role: 'user' | 'assistant', content: string, timestamp?: string}>>([]);
   const [aiQuestion, setAiQuestion] = useState('');
@@ -602,7 +605,7 @@ export default function PlatformPage() {
           <div className="flex gap-8">
             {[
               { id: 'predict', label: 'Risk Prediction', icon: '🎯' },
-              { id: 'dna-analysis', label: 'DNA Analysis', icon: '🧬' },
+              { id: 'dna-analysis', label: 'Genetic Variants', icon: '🧬' },
               { id: 'medical-imaging', label: 'Medical Imaging', icon: '👁️' },
               { id: 'ai-insights', label: 'AI Clinical Intelligence', icon: '🧠' },
               { id: 'federated', label: 'Federated Network', icon: '🔗' },
@@ -656,7 +659,7 @@ export default function PlatformPage() {
             </motion.div>
           )}
 
-          {/* DNA Analysis Tab (Evo 2) */}
+          {/* Variant Pathogenicity Analyzer (Evo 2) */}
           {activeTab === 'dna-analysis' && (
             <motion.div
               key="dna-analysis"
@@ -665,7 +668,7 @@ export default function PlatformPage() {
               exit={{ opacity: 0, y: -20 }}
               className="max-w-4xl mx-auto"
             >
-              <DNAAnalysis />
+              <VariantAnalyzer />
             </motion.div>
           )}
 
@@ -813,199 +816,183 @@ export default function PlatformPage() {
                     )}
                   </div>
 
-                  {/* Risk Factor Impact Calculator */}
+                  {/* AI Clinical Reasoning */}
                   <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8 border border-black/10">
                     <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center gap-3">
-                        <span className="text-3xl">🎯</span>
+                        <span className="text-3xl">🧠</span>
                         <div>
-                          <h3 className="text-xl font-bold text-black">Risk Factor Impact Analysis</h3>
-                          <p className="text-sm text-black/60">Modifiable factors ranked by potential risk reduction</p>
+                          <h3 className="text-xl font-bold text-black">AI Clinical Reasoning</h3>
+                          <p className="text-sm text-black/60">Deep analysis of this patient's clinical picture</p>
                         </div>
                       </div>
-                      {multiDiseaseData && (
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-green-600">
-                            -{(() => {
+                      {multiDiseaseData && !clinicalReasoning && (
+                        <button
+                          onClick={async () => {
+                            setClinicalReasoningLoading(true);
+                            try {
                               const inputData = multiDiseaseData?.input_data || {};
-                              let total = 0;
-                              if (inputData.bmi > 25) total += Math.min(12, Math.round((inputData.bmi - 25) * 2.4));
-                              if (inputData.hba1c > 5.7) total += Math.min(15, Math.round((inputData.hba1c - 5.4) * 5));
-                              if (inputData.bp_systolic > 120) total += Math.min(10, Math.round((inputData.bp_systolic - 120) * 0.5));
-                              if (inputData.ldl > 100) total += Math.min(8, Math.round((inputData.ldl - 100) * 0.16));
-                              if (inputData.smoking_pack_years > 0) total += Math.min(15, inputData.smoking_pack_years);
-                              if ((inputData.exercise_hours_weekly || 0) < 5) total += Math.round((5 - (inputData.exercise_hours_weekly || 0)) * 1.5);
-                              return Math.min(45, total);
-                            })()}%
-                          </div>
-                          <div className="text-xs text-black/50">Potential Risk Reduction</div>
-                        </div>
+                              const predictions = multiDiseaseData?.predictions || {};
+                              
+                              // Get top risk diseases
+                              const topRisks = Object.values(predictions)
+                                .sort((a: any, b: any) => b.risk_score - a.risk_score)
+                                .slice(0, 5)
+                                .map((d: any) => ({ name: d.name, risk: d.risk_percentage, category: d.risk_category }));
+                              
+                              const response = await fetch(`${API_BASE}/ai/clinical-reasoning`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  patient_data: {
+                                    age: inputData.age,
+                                    sex: inputData.sex === 1 ? 'Male' : 'Female',
+                                    bmi: inputData.bmi,
+                                    bp_systolic: inputData.bp_systolic,
+                                    bp_diastolic: inputData.bp_diastolic,
+                                    hba1c: inputData.hba1c,
+                                    ldl: inputData.ldl,
+                                    hdl: inputData.hdl,
+                                    total_cholesterol: inputData.total_cholesterol,
+                                    triglycerides: inputData.triglycerides,
+                                    smoking_pack_years: inputData.smoking_pack_years,
+                                    exercise_hours_weekly: inputData.exercise_hours_weekly,
+                                    family_history_score: inputData.family_history_score
+                                  },
+                                  top_risks: topRisks,
+                                  high_risk_count: multiDiseaseData?.summary?.high_risk_count || 0
+                                })
+                              });
+                              const data = await response.json();
+                              setClinicalReasoning(data);
+                            } catch (error) {
+                              console.error('Clinical reasoning failed:', error);
+                              setClinicalReasoning({ error: 'Failed to generate clinical reasoning. Please try again.' });
+                            } finally {
+                              setClinicalReasoningLoading(false);
+                            }
+                          }}
+                          className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-full text-sm font-medium hover:from-indigo-700 hover:to-purple-700 flex items-center gap-2 shadow-lg"
+                        >
+                          <span>🧠</span>
+                          Analyze Patient
+                        </button>
+                      )}
+                      {clinicalReasoning && (
+                        <button
+                          onClick={() => setClinicalReasoning(null)}
+                          className="text-sm text-black/50 hover:text-black"
+                        >
+                          ↻ Re-analyze
+                        </button>
                       )}
                     </div>
 
-                    {multiDiseaseData ? (
+                    {clinicalReasoningLoading ? (
+                      <div className="text-center py-12">
+                        <div className="inline-flex items-center gap-3 bg-indigo-50 px-6 py-4 rounded-2xl">
+                          <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                          <span className="text-indigo-700 font-medium">AI is analyzing patient data...</span>
+                        </div>
+                      </div>
+                    ) : clinicalReasoning ? (
                       <div className="space-y-4">
-                        {/* Risk Factors - Sorted by Impact */}
-                        {(() => {
-                          const inputData = multiDiseaseData?.input_data || {};
-                          const factors = [
-                            {
-                              name: 'HbA1c',
-                              current: inputData.hba1c || 5.7,
-                              target: 5.4,
-                              unit: '%',
-                              impact: inputData.hba1c > 5.7 ? Math.min(15, Math.round((inputData.hba1c - 5.4) * 5)) : 0,
-                              status: inputData.hba1c <= 5.4 ? 'optimal' : inputData.hba1c <= 5.7 ? 'elevated' : 'high',
-                              action: inputData.hba1c > 5.7 ? 'Reduce refined carbs, increase fiber, consider metformin if prediabetic' : 'Maintain current glycemic control',
-                              icon: '🩸'
-                            },
-                            {
-                              name: 'BMI',
-                              current: inputData.bmi || 27.5,
-                              target: 25.0,
-                              unit: 'kg/m²',
-                              impact: inputData.bmi > 25 ? Math.min(12, Math.round((inputData.bmi - 25) * 2.4)) : 0,
-                              status: inputData.bmi <= 25 ? 'optimal' : inputData.bmi <= 30 ? 'elevated' : 'high',
-                              action: inputData.bmi > 25 ? `Lose ${Math.round((inputData.bmi - 25) * 2.5)}kg through caloric deficit (500kcal/day)` : 'Maintain healthy weight',
-                              icon: '⚖️'
-                            },
-                            {
-                              name: 'Blood Pressure',
-                              current: inputData.bp_systolic || 130,
-                              target: 120,
-                              unit: 'mmHg',
-                              impact: inputData.bp_systolic > 120 ? Math.min(10, Math.round((inputData.bp_systolic - 120) * 0.5)) : 0,
-                              status: inputData.bp_systolic <= 120 ? 'optimal' : inputData.bp_systolic <= 130 ? 'elevated' : 'high',
-                              action: inputData.bp_systolic > 120 ? 'DASH diet, reduce sodium <2000mg/day, consider ACE inhibitor' : 'Continue BP monitoring',
-                              icon: '💓'
-                            },
-                            {
-                              name: 'LDL Cholesterol',
-                              current: inputData.ldl || 120,
-                              target: 100,
-                              unit: 'mg/dL',
-                              impact: inputData.ldl > 100 ? Math.min(8, Math.round((inputData.ldl - 100) * 0.16)) : 0,
-                              status: inputData.ldl <= 100 ? 'optimal' : inputData.ldl <= 130 ? 'elevated' : 'high',
-                              action: inputData.ldl > 100 ? 'Statin therapy, reduce saturated fat, increase omega-3' : 'Maintain lipid profile',
-                              icon: '🫀'
-                            },
-                            {
-                              name: 'Smoking',
-                              current: inputData.smoking_pack_years || 0,
-                              target: 0,
-                              unit: 'pack-years',
-                              impact: inputData.smoking_pack_years > 0 ? Math.min(15, inputData.smoking_pack_years) : 0,
-                              status: inputData.smoking_pack_years === 0 ? 'optimal' : 'high',
-                              action: inputData.smoking_pack_years > 0 ? 'Smoking cessation program, NRT or varenicline' : 'Non-smoker ✓',
-                              icon: '🚭'
-                            },
-                            {
-                              name: 'Exercise',
-                              current: inputData.exercise_hours_weekly || 2.5,
-                              target: 5,
-                              unit: 'hrs/week',
-                              impact: (inputData.exercise_hours_weekly || 0) < 5 ? Math.round((5 - (inputData.exercise_hours_weekly || 0)) * 1.5) : 0,
-                              status: (inputData.exercise_hours_weekly || 0) >= 5 ? 'optimal' : (inputData.exercise_hours_weekly || 0) >= 2.5 ? 'elevated' : 'high',
-                              action: (inputData.exercise_hours_weekly || 0) < 5 ? `Add ${Math.round(5 - (inputData.exercise_hours_weekly || 0))} more hrs/week moderate activity` : 'Excellent activity level',
-                              icon: '🏃'
-                            }
-                          ].sort((a, b) => b.impact - a.impact);
+                        {clinicalReasoning.error ? (
+                          <div className="bg-red-50 rounded-2xl p-6 border border-red-200">
+                            <p className="text-red-700">{clinicalReasoning.error}</p>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Primary Assessment */}
+                            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-200">
+                              <div className="flex items-start gap-3 mb-4">
+                                <span className="text-2xl">🔍</span>
+                                <div>
+                                  <h4 className="font-bold text-indigo-900">Clinical Assessment</h4>
+                                  <p className="text-sm text-indigo-700/70">AI-generated analysis of this patient</p>
+                                </div>
+                              </div>
+                              <div className="prose prose-sm max-w-none text-black/80 leading-relaxed whitespace-pre-wrap">
+                                {clinicalReasoning.assessment}
+                              </div>
+                            </div>
 
-                          return factors.map((factor, idx) => (
-                            <div 
-                              key={factor.name}
-                              className={`p-4 rounded-2xl border transition-all ${
-                                factor.status === 'optimal' 
-                                  ? 'bg-emerald-50 border-emerald-200' 
-                                  : factor.status === 'elevated'
-                                  ? 'bg-amber-50 border-amber-200'
-                                  : 'bg-red-50 border-red-200'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-start gap-3 flex-1">
-                                  <span className="text-2xl">{factor.icon}</span>
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className="font-bold text-black">{factor.name}</span>
-                                      {factor.impact > 0 && (
-                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded-full">
-                                          -{factor.impact}% risk
-                                        </span>
-                                      )}
-                                      {factor.status === 'optimal' && (
-                                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">
-                                          ✓ Optimal
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-4 text-sm mb-2">
-                                      <span className={`font-medium ${factor.status === 'optimal' ? 'text-emerald-700' : factor.status === 'elevated' ? 'text-amber-700' : 'text-red-700'}`}>
-                                        Current: {factor.current} {factor.unit}
-                                      </span>
-                                      {factor.status !== 'optimal' && (
-                                        <>
-                                          <span className="text-black/30">→</span>
-                                          <span className="text-emerald-600 font-medium">Target: {factor.target} {factor.unit}</span>
-                                        </>
-                                      )}
-                                    </div>
-                                    <p className="text-xs text-black/60">{factor.action}</p>
+                            {/* Key Findings */}
+                            {clinicalReasoning.key_findings && (
+                              <div className="bg-amber-50 rounded-2xl p-6 border border-amber-200">
+                                <div className="flex items-start gap-3 mb-4">
+                                  <span className="text-2xl">⚡</span>
+                                  <h4 className="font-bold text-amber-900">Key Findings</h4>
+                                </div>
+                                <ul className="space-y-2">
+                                  {clinicalReasoning.key_findings.map((finding: string, idx: number) => (
+                                    <li key={idx} className="flex items-start gap-2 text-sm text-amber-800">
+                                      <span className="text-amber-500 mt-1">•</span>
+                                      <span>{finding}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Risk Connections */}
+                            {clinicalReasoning.risk_connections && (
+                              <div className="bg-red-50 rounded-2xl p-6 border border-red-200">
+                                <div className="flex items-start gap-3 mb-4">
+                                  <span className="text-2xl">🔗</span>
+                                  <h4 className="font-bold text-red-900">Risk Connections</h4>
+                                </div>
+                                <p className="text-sm text-red-800 leading-relaxed whitespace-pre-wrap">
+                                  {clinicalReasoning.risk_connections}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* What to Investigate */}
+                            {clinicalReasoning.investigate && (
+                              <div className="bg-blue-50 rounded-2xl p-6 border border-blue-200">
+                                <div className="flex items-start gap-3 mb-4">
+                                  <span className="text-2xl">🔬</span>
+                                  <h4 className="font-bold text-blue-900">Recommended Investigations</h4>
+                                </div>
+                                <ul className="space-y-2">
+                                  {clinicalReasoning.investigate.map((item: string, idx: number) => (
+                                    <li key={idx} className="flex items-start gap-2 text-sm text-blue-800">
+                                      <span className="text-blue-500 mt-1">→</span>
+                                      <span>{item}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Clinical Pearl */}
+                            {clinicalReasoning.clinical_pearl && (
+                              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl p-6 text-white">
+                                <div className="flex items-start gap-3">
+                                  <span className="text-2xl">💎</span>
+                                  <div>
+                                    <h4 className="font-bold mb-2">Clinical Pearl</h4>
+                                    <p className="text-sm text-white/90 leading-relaxed">
+                                      {clinicalReasoning.clinical_pearl}
+                                    </p>
                                   </div>
                                 </div>
-                                {factor.impact > 0 && (
-                                  <div className="w-24 ml-4">
-                                    <div className="h-2 bg-black/10 rounded-full overflow-hidden">
-                                      <div 
-                                        className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full transition-all"
-                                        style={{ width: `${Math.min(100, factor.impact * 6.67)}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                )}
                               </div>
-                            </div>
-                          ));
-                        })()}
-
-                        {/* Summary Card */}
-                        <div className="bg-gradient-to-r from-stone-100 to-stone-50 rounded-2xl p-6 border border-stone-200 mt-6">
-                          <div className="flex items-start gap-4">
-                            <span className="text-3xl">📋</span>
-                            <div>
-                              <h4 className="font-bold text-black mb-2">Clinical Priority Order</h4>
-                              <p className="text-sm text-black/70 mb-3">
-                                Based on this patient's profile, address modifiable factors in order of impact. 
-                                Combined interventions could reduce overall disease risk by up to{' '}
-                                <span className="font-bold text-green-600">
-                                  {(() => {
-                                    const inputData = multiDiseaseData?.input_data || {};
-                                    let total = 0;
-                                    if (inputData.bmi > 25) total += Math.min(12, Math.round((inputData.bmi - 25) * 2.4));
-                                    if (inputData.hba1c > 5.7) total += Math.min(15, Math.round((inputData.hba1c - 5.4) * 5));
-                                    if (inputData.bp_systolic > 120) total += Math.min(10, Math.round((inputData.bp_systolic - 120) * 0.5));
-                                    if (inputData.ldl > 100) total += Math.min(8, Math.round((inputData.ldl - 100) * 0.16));
-                                    if (inputData.smoking_pack_years > 0) total += Math.min(15, inputData.smoking_pack_years);
-                                    if ((inputData.exercise_hours_weekly || 0) < 5) total += Math.round((5 - (inputData.exercise_hours_weekly || 0)) * 1.5);
-                                    return Math.min(45, total);
-                                  })()}%
-                                </span>.
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {['lifestyle', 'medication', 'monitoring'].map(tag => (
-                                  <span key={tag} className="px-2 py-1 bg-white rounded-full text-xs font-medium text-black/60 border border-black/10">
-                                    {tag === 'lifestyle' ? '🥗 Lifestyle' : tag === 'medication' ? '💊 Medication' : '📊 Monitoring'}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ) : multiDiseaseData ? (
+                      <div className="text-center py-12 bg-gradient-to-br from-indigo-50/50 to-purple-50/50 rounded-2xl border border-dashed border-indigo-200">
+                        <span className="text-5xl mb-4 block">🧠</span>
+                        <p className="text-black/60 mb-2">Get AI-powered clinical insights</p>
+                        <p className="text-sm text-black/40">Analyzes biomarker patterns, risk connections, and what to investigate</p>
                       </div>
                     ) : (
                       <div className="text-center py-12 text-black/50">
-                        <span className="text-4xl mb-4 block">📊</span>
-                        Run a risk prediction first to see personalized risk factor analysis
+                        <span className="text-4xl mb-4 block">🧠</span>
+                        Run a risk prediction first to enable AI clinical reasoning
                       </div>
                     )}
                   </div>
@@ -1052,9 +1039,10 @@ export default function PlatformPage() {
                           <p className="text-sm text-black/60">Evidence-based protocol from clinical trials</p>
                         </div>
                       </div>
-                      {!treatment && (
+                      {!treatment && !treatmentLoading && (
                         <button
                           onClick={async () => {
+                            setTreatmentLoading(true);
                             try {
                               // Get data from multiDiseaseData.input_data or prediction or defaults
                               const inputData = multiDiseaseData?.input_data || {};
@@ -1078,12 +1066,20 @@ export default function PlatformPage() {
                             } catch (error) {
                               console.error('Treatment optimization failed:', error);
                               alert('Failed to generate treatment. Check console.');
+                            } finally {
+                              setTreatmentLoading(false);
                             }
                           }}
                           className="bg-black text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-stone-800"
                         >
                           ✨ Generate Protocol
                         </button>
+                      )}
+                      {treatmentLoading && (
+                        <div className="flex items-center gap-2 bg-black/10 px-6 py-3 rounded-full">
+                          <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                          <span className="text-sm font-medium text-black/70">Generating protocol...</span>
+                        </div>
                       )}
                     </div>
 
