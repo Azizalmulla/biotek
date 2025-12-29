@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://biotek-production.up.railway.app';
+const API_BASE = 'https://biotek-production.up.railway.app';
 import { motion, AnimatePresence } from 'framer-motion';
 
 type AnalysisMode = 'standard' | 'localize' | 'deep-diagnosis' | 'compare' | 'video' | 'document';

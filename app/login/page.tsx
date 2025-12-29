@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://biotek-production.up.railway.app';
+// Hardcoded for production - env vars not working with Vercel cache
+const API_BASE = 'https://biotek-production.up.railway.app';
 
 const roles = [
   {
