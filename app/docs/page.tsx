@@ -45,8 +45,10 @@ export default function DocsPage() {
             <div>
               <h3 className="font-bold text-black mb-4">AI Models</h3>
               <ul className="space-y-2 text-sm text-black/60">
-                <li><a href="#risk-model" className="hover:text-black transition-colors">Risk Prediction (RF)</a></li>
-                <li><a href="#clinical-llm" className="hover:text-black transition-colors">Clinical Assistant (Qwen)</a></li>
+                <li><a href="#risk-model" className="hover:text-black transition-colors">Risk Prediction (XGBoost+LightGBM)</a></li>
+                <li><a href="#evo2" className="hover:text-black transition-colors">Evo 2 DNA Model</a></li>
+                <li><a href="#glm" className="hover:text-black transition-colors">GLM-4.5V Vision</a></li>
+                <li><a href="#clinical-llm" className="hover:text-black transition-colors">AI Research Assistant</a></li>
                 <li><a href="#explainability" className="hover:text-black transition-colors">SHAP Explainability</a></li>
               </ul>
             </div>
@@ -85,7 +87,7 @@ export default function DocsPage() {
                 <div className="text-xs text-black/50">GWAS SNPs</div>
               </div>
               <div className="bg-white rounded-2xl p-4 border border-black/5">
-                <div className="text-2xl font-bold text-black">85%</div>
+                <div className="text-2xl font-bold text-black">83%</div>
                 <div className="text-xs text-black/50">Avg Accuracy</div>
               </div>
             </div>
@@ -193,7 +195,7 @@ data_shared: NONE (only model weights)`}
             <div className="bg-white rounded-3xl p-8 border border-black/5 shadow-sm space-y-6">
               <p className="text-black/70 leading-relaxed">
                 BioTeK uses 12 disease-specific XGBoost + LightGBM ensemble models (v2.0.0), each trained on real medical datasets 
-                from UCI, Kaggle, and clinical repositories. Average accuracy across all models is 85%.
+                from UCI, Kaggle, and clinical repositories. Average accuracy across all models is 83% with AUC of 0.890.
               </p>
               
               <div className="grid md:grid-cols-2 gap-8">
@@ -296,26 +298,114 @@ data_shared: NONE (only model weights)`}
             </div>
           </section>
 
-          {/* Clinical LLM */}
-          <section id="clinical-llm" className="scroll-mt-32">
+          {/* Evo 2 DNA Foundation Model */}
+          <section id="evo2" className="scroll-mt-32">
             <h2 className="text-2xl font-bold text-black mb-6 flex items-center gap-3">
               <span className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center text-sm">06</span>
-              Clinical Assistant (LLM)
+              Evo 2 DNA Foundation Model
             </h2>
             <div className="bg-white rounded-3xl p-8 border border-black/5 shadow-sm space-y-6">
               <p className="text-black/70 leading-relaxed">
-                We utilize <strong>Qwen3-8B</strong> running locally via Ollama at <code className="bg-black/5 px-2 py-0.5 rounded text-sm">localhost:11434</code>. 
-                This allows for natural language generation of clinical reports without sending sensitive patient context to external cloud providers.
+                <strong>Evo 2</strong> is a 40B parameter biological foundation model from Arc Institute, accessed via NVIDIA NIM API. 
+                It understands DNA sequences across all domains of life with single-nucleotide sensitivity.
               </p>
-              <div className="bg-stone-50 border border-stone-200 p-6 rounded-2xl flex items-start gap-4">
-                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center flex-shrink-0 text-black">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="bg-black/[0.03] p-6 rounded-2xl">
+                  <div className="font-bold text-black mb-2">Capabilities</div>
+                  <ul className="text-sm text-black/60 space-y-1">
+                    <li>• DNA sequence analysis & embeddings</li>
+                    <li>• Variant effect prediction</li>
+                    <li>• Gene/protein sequence design</li>
+                    <li>• Mutation impact scoring</li>
+                  </ul>
                 </div>
-                <div>
-                  <h4 className="font-bold text-black text-sm mb-1">Why Local Inference?</h4>
-                  <p className="text-sm text-black/70">
-                    By running the LLM on the hospital's own hardware (on-premise), we eliminate the risk of data leakage via API calls. 
-                    This ensures compliance with GDPR and HIPAA regulations regarding data sovereignty.
+                <div className="bg-black/[0.03] p-6 rounded-2xl">
+                  <div className="font-bold text-black mb-2">Supported Organisms</div>
+                  <ul className="text-sm text-black/60 space-y-1">
+                    <li>• Human (Homo sapiens)</li>
+                    <li>• Mouse (Mus musculus)</li>
+                    <li>• E. coli</li>
+                    <li>• Yeast (S. cerevisiae)</li>
+                  </ul>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <div className="bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-full text-sm text-emerald-700">
+                  NVIDIA NIM API
+                </div>
+                <div className="bg-blue-50 border border-blue-200 px-4 py-2 rounded-full text-sm text-blue-700">
+                  40B Parameters
+                </div>
+                <div className="bg-purple-50 border border-purple-200 px-4 py-2 rounded-full text-sm text-purple-700">
+                  arc/evo2-40b
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* GLM-4.5V Vision Model */}
+          <section id="glm" className="scroll-mt-32">
+            <h2 className="text-2xl font-bold text-black mb-6 flex items-center gap-3">
+              <span className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center text-sm">07</span>
+              GLM-4.5V Medical Vision AI
+            </h2>
+            <div className="bg-white rounded-3xl p-8 border border-black/5 shadow-sm space-y-6">
+              <p className="text-black/70 leading-relaxed">
+                <strong>GLM-4.5V</strong> is a vision-language foundation model with 106B parameters (12B activated via MoE). 
+                Accessed via OpenRouter API, it excels at medical imaging analysis, document OCR, and clinical visual Q&A.
+              </p>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="bg-black/[0.03] p-4 rounded-xl">
+                  <div className="font-bold text-black text-sm mb-2">Medical Imaging</div>
+                  <p className="text-xs text-black/60">X-ray, CT, MRI, ultrasound, and pathology slide interpretation</p>
+                </div>
+                <div className="bg-black/[0.03] p-4 rounded-xl">
+                  <div className="font-bold text-black text-sm mb-2">Document OCR</div>
+                  <p className="text-xs text-black/60">Lab reports, EHRs, prescriptions, and clinical documents</p>
+                </div>
+                <div className="bg-black/[0.03] p-4 rounded-xl">
+                  <div className="font-bold text-black text-sm mb-2">Deep Reasoning</div>
+                  <p className="text-xs text-black/60">Hybrid thinking/non-thinking modes for complex diagnoses</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <div className="bg-orange-50 border border-orange-200 px-4 py-2 rounded-full text-sm text-orange-700">
+                  OpenRouter API
+                </div>
+                <div className="bg-blue-50 border border-blue-200 px-4 py-2 rounded-full text-sm text-blue-700">
+                  106B Parameters (MoE)
+                </div>
+                <div className="bg-purple-50 border border-purple-200 px-4 py-2 rounded-full text-sm text-purple-700">
+                  z-ai/glm-4.5v
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* AI Research Assistant */}
+          <section id="clinical-llm" className="scroll-mt-32">
+            <h2 className="text-2xl font-bold text-black mb-6 flex items-center gap-3">
+              <span className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center text-sm">08</span>
+              AI Research Assistant & Treatment Optimizer
+            </h2>
+            <div className="bg-white rounded-3xl p-8 border border-black/5 shadow-sm space-y-6">
+              <p className="text-black/70 leading-relaxed">
+                Powered by <strong>GLM-4.5V</strong> via OpenRouter, our AI assistant provides conversational clinical insights, 
+                answers patient-specific questions, and generates evidence-based treatment protocols following ADA/EASD guidelines.
+              </p>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="bg-black/[0.03] p-6 rounded-2xl">
+                  <div className="font-bold text-black mb-2">AI Research Assistant</div>
+                  <p className="text-sm text-black/60">
+                    Ask questions about patient predictions, risk factors, and clinical recommendations. 
+                    Context-aware responses using patient's full clinical profile.
+                  </p>
+                </div>
+                <div className="bg-black/[0.03] p-6 rounded-2xl">
+                  <div className="font-bold text-black mb-2">AI Treatment Optimizer</div>
+                  <p className="text-sm text-black/60">
+                    Generates 3-phase treatment protocols: lifestyle interventions, pharmacotherapy, 
+                    and long-term management with projected outcomes.
                   </p>
                 </div>
               </div>
@@ -325,13 +415,13 @@ data_shared: NONE (only model weights)`}
           {/* SHAP Explainability */}
           <section id="explainability" className="scroll-mt-32">
             <h2 className="text-2xl font-bold text-black mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center text-sm">06</span>
+              <span className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center text-sm">09</span>
               SHAP Explainability
             </h2>
             <div className="bg-white rounded-3xl p-8 border border-black/5 shadow-sm space-y-6">
               <p className="text-black/70 leading-relaxed">
                 We use <strong>SHAP (SHapley Additive exPlanations)</strong> to provide transparent, interpretable explanations for each prediction. 
-                SHAP values are computed using a TreeExplainer optimized for our RandomForest model.
+                SHAP values are computed using a TreeExplainer optimized for our XGBoost+LightGBM ensemble.
               </p>
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="bg-black/[0.03] p-6 rounded-2xl">
@@ -355,7 +445,7 @@ data_shared: NONE (only model weights)`}
           {/* Encryption Standards */}
           <section id="encryption" className="scroll-mt-32">
             <h2 className="text-2xl font-bold text-black mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center text-sm">07</span>
+              <span className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center text-sm">10</span>
               Encryption Standards
             </h2>
             <div className="bg-white rounded-3xl p-8 border border-black/5 shadow-sm">
@@ -389,7 +479,7 @@ data_shared: NONE (only model weights)`}
           {/* RBAC & Audit Logs */}
           <section id="access-control" className="scroll-mt-32">
             <h2 className="text-2xl font-bold text-black mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center text-sm">08</span>
+              <span className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center text-sm">11</span>
               RBAC & Audit Logs
             </h2>
             <div className="bg-white rounded-3xl p-8 border border-black/5 shadow-sm space-y-6">
