@@ -346,75 +346,73 @@ async def load_model():
     global model, feature_names, model_metadata, shap_explainer, medical_knowledge
     global real_disease_models, real_models_metadata
     
+    # Try to load base model (optional)
     try:
-        with open(MODEL_PATH, 'rb') as f:
-            model = pickle.load(f)
-        with open(FEATURES_PATH, 'rb') as f:
-            feature_names = pickle.load(f)
-        with open(METADATA_PATH, 'rb') as f:
-            model_metadata = pickle.load(f)
-        
-        print("✓ Model loaded successfully")
-        print(f"  Model: {model_metadata['model_type']} v{model_metadata['version']}")
-        print(f"  Accuracy: {model_metadata['accuracy']:.1%}")
-        print(f"  Features: {', '.join(feature_names)}")
-        
-        # Initialize SHAP explainer if available
-        if SHAP_AVAILABLE and shap is not None:
-            print("  Initializing SHAP explainer...")
-            background_data = np.random.randn(100, len(feature_names))
-            shap_explainer = shap.TreeExplainer(model)
-            print("✓ SHAP explainer initialized")
-        else:
-            print("  ⚠️ SHAP not available - skipping explainer")
-        
-        # Load REAL trained disease models (XGBoost + LightGBM)
-        print("\n📊 Loading Real Disease Models...")
-        disease_model_files = {
-            'type2_diabetes': 'real_type2_diabetes_model.pkl',
-            'coronary_heart_disease': 'real_coronary_heart_disease_model.pkl',
-            'stroke': 'real_stroke_model.pkl',
-            'chronic_kidney_disease': 'real_chronic_kidney_disease_model.pkl',
-            'nafld': 'real_nafld_model.pkl',
-            'breast_cancer': 'real_breast_cancer_model.pkl',
-            'hypertension': 'real_hypertension_model.pkl',
-            'heart_failure': 'real_heart_failure_model.pkl',
-            'copd': 'real_copd_model.pkl',
-            'alzheimers_disease': 'real_alzheimers_disease_model.pkl',
-            'atrial_fibrillation': 'real_atrial_fibrillation_model.pkl',
-            'colorectal_cancer': 'real_colorectal_cancer_model.pkl',
-        }
-        
-        for disease_id, filename in disease_model_files.items():
-            model_path = REAL_MODELS_DIR / filename
+        if MODEL_PATH.exists():
+            with open(MODEL_PATH, 'rb') as f:
+                model = pickle.load(f)
+            with open(FEATURES_PATH, 'rb') as f:
+                feature_names = pickle.load(f)
+            with open(METADATA_PATH, 'rb') as f:
+                model_metadata = pickle.load(f)
+            print("✓ Base model loaded")
+    except Exception as e:
+        print(f"  Base model not loaded: {e}")
+    
+    # Load REAL trained disease models (CRITICAL - trained on real patient data)
+    print("\n📊 Loading Real Disease Models (trained on UCI/Kaggle data)...")
+    print(f"  Looking in: {REAL_MODELS_DIR}")
+    
+    disease_model_files = {
+        'type2_diabetes': 'real_type2_diabetes_model.pkl',
+        'coronary_heart_disease': 'real_coronary_heart_disease_model.pkl',
+        'stroke': 'real_stroke_model.pkl',
+        'chronic_kidney_disease': 'real_chronic_kidney_disease_model.pkl',
+        'nafld': 'real_nafld_model.pkl',
+        'breast_cancer': 'real_breast_cancer_model.pkl',
+        'hypertension': 'real_hypertension_model.pkl',
+        'heart_failure': 'real_heart_failure_model.pkl',
+        'copd': 'real_copd_model.pkl',
+        'alzheimers_disease': 'real_alzheimers_disease_model.pkl',
+        'atrial_fibrillation': 'real_atrial_fibrillation_model.pkl',
+        'colorectal_cancer': 'real_colorectal_cancer_model.pkl',
+    }
+    
+    for disease_id, filename in disease_model_files.items():
+        model_path = REAL_MODELS_DIR / filename
+        try:
             if model_path.exists():
                 with open(model_path, 'rb') as f:
                     real_disease_models[disease_id] = pickle.load(f)
-                print(f"  ✓ {disease_id}: {real_disease_models[disease_id].metrics['accuracy']*100:.1f}% accuracy")
+                acc = real_disease_models[disease_id].metrics.get('accuracy', 0) * 100
+                print(f"  ✓ {disease_id}: {acc:.1f}% accuracy")
             else:
-                print(f"  ⚠ {disease_id}: model file not found")
-        
-        # Load real models metadata
+                print(f"  ⚠ {disease_id}: not found at {model_path}")
+        except Exception as e:
+            print(f"  ✗ {disease_id}: load error - {e}")
+    
+    # Load real models metadata
+    try:
         metadata_path = REAL_MODELS_DIR / 'real_models_metadata.pkl'
         if metadata_path.exists():
             with open(metadata_path, 'rb') as f:
                 real_models_metadata = pickle.load(f)
-        
-        print(f"✓ Loaded {len(real_disease_models)}/12 real disease models")
-        
-        # Load medical knowledge base
+    except Exception as e:
+        print(f"  Metadata not loaded: {e}")
+    
+    print(f"✓ Loaded {len(real_disease_models)}/12 real disease models")
+    
+    # Load medical knowledge base
+    try:
         if KNOWLEDGE_PATH.exists():
             with open(KNOWLEDGE_PATH, 'r') as f:
                 medical_knowledge = json.load(f)
-            print(f"✓ Medical knowledge base loaded ({len(medical_knowledge)} entries)")
-        
-        # Initialize database
-        init_database()
-        
+            print(f"✓ Medical knowledge base loaded")
     except Exception as e:
-        print(f"⚠️ Model loading skipped (running in cloud mode): {e}")
-        # Don't raise - app can still work with cloud APIs
-        init_database()
+        print(f"  Knowledge base not loaded: {e}")
+    
+    # Initialize database
+    init_database()
 
 
 def init_database():
