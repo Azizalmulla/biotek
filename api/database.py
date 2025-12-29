@@ -345,7 +345,186 @@ def init_postgres_tables():
             print("✓ PostgreSQL tables initialized")
 
 
-# Initialize PostgreSQL tables on import if using Postgres
+def init_sqlite_tables():
+    """Initialize SQLite tables"""
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    
+    # Access logs table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS access_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            user_role TEXT NOT NULL,
+            purpose TEXT NOT NULL,
+            data_type TEXT,
+            patient_id TEXT,
+            granted INTEGER NOT NULL,
+            reason TEXT,
+            ip_address TEXT
+        )
+    """)
+    
+    # Predictions table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS predictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            patient_id TEXT,
+            input_data TEXT,
+            risk_score REAL,
+            risk_category TEXT,
+            used_genetics INTEGER DEFAULT 0,
+            consent_id TEXT,
+            model_version TEXT
+        )
+    """)
+    
+    # Staff accounts
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS staff_accounts (
+            user_id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL,
+            full_name TEXT,
+            employee_id TEXT,
+            department TEXT,
+            created_at TEXT NOT NULL,
+            created_by TEXT,
+            activated INTEGER DEFAULT 0,
+            activation_token TEXT,
+            two_factor_enabled INTEGER DEFAULT 0,
+            two_factor_secret TEXT,
+            backup_codes TEXT,
+            last_login TEXT,
+            failed_login_attempts INTEGER DEFAULT 0,
+            locked_until TEXT
+        )
+    """)
+    
+    # Admin accounts
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS admin_accounts (
+            admin_id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            full_name TEXT,
+            created_at TEXT NOT NULL,
+            super_admin INTEGER DEFAULT 0,
+            two_factor_enabled INTEGER DEFAULT 0,
+            two_factor_secret TEXT,
+            backup_codes TEXT,
+            last_login TEXT,
+            failed_login_attempts INTEGER DEFAULT 0,
+            locked_until TEXT
+        )
+    """)
+    
+    # Patient prediction results
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS patient_prediction_results (
+            patient_id TEXT PRIMARY KEY,
+            updated_at TEXT NOT NULL,
+            prediction_json TEXT NOT NULL
+        )
+    """)
+    
+    # Patient variant results
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS patient_variant_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            variant TEXT NOT NULL,
+            gene TEXT,
+            classification TEXT NOT NULL,
+            confidence REAL,
+            result_json TEXT NOT NULL
+        )
+    """)
+    
+    # Patient imaging results
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS patient_imaging_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            image_type TEXT NOT NULL,
+            finding_summary TEXT,
+            result_json TEXT NOT NULL
+        )
+    """)
+    
+    # Patient treatments
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS patient_treatments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            treatment_type TEXT NOT NULL,
+            protocol_summary TEXT,
+            result_json TEXT NOT NULL
+        )
+    """)
+    
+    # Patient clinical reasoning
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS patient_clinical_reasoning (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            assessment_summary TEXT,
+            result_json TEXT NOT NULL
+        )
+    """)
+    
+    # Data exchange requests
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS data_exchange_requests (
+            exchange_id TEXT PRIMARY KEY,
+            patient_id TEXT NOT NULL,
+            requesting_institution TEXT NOT NULL,
+            sending_institution TEXT NOT NULL,
+            purpose TEXT NOT NULL,
+            categories TEXT NOT NULL,
+            status TEXT NOT NULL,
+            requested_by TEXT NOT NULL,
+            requested_at TEXT NOT NULL,
+            patient_consent_status TEXT,
+            patient_consent_at TEXT,
+            approved_by TEXT,
+            approved_at TEXT,
+            sent_at TEXT,
+            received_at TEXT,
+            expires_at TEXT,
+            denial_reason TEXT
+        )
+    """)
+    
+    # Insert demo staff account
+    cursor.execute("""
+        INSERT OR IGNORE INTO staff_accounts (user_id, email, password_hash, role, full_name, created_at, activated)
+        VALUES ('doctor_DOC001', 'doctor@biotek.demo', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.rMvvlRQFVpLpGy', 'doctor', 'Demo Doctor', '2025-01-01', 1)
+    """)
+    
+    # Insert demo admin account
+    cursor.execute("""
+        INSERT OR IGNORE INTO admin_accounts (admin_id, email, password_hash, full_name, created_at, super_admin)
+        VALUES ('admin_ADM001', 'admin@biotek.demo', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.rMvvlRQFVpLpGy', 'Demo Admin', '2025-01-01', 1)
+    """)
+    
+    conn.commit()
+    conn.close()
+    print("✓ SQLite tables initialized")
+
+
+# Initialize tables on import
 if USE_POSTGRES:
     try:
         init_postgres_tables()
@@ -353,6 +532,9 @@ if USE_POSTGRES:
         print(f"Warning: Failed to initialize PostgreSQL tables: {e}")
         print("Falling back to SQLite...")
         USE_POSTGRES = False
+        init_sqlite_tables()
+else:
+    init_sqlite_tables()
 
 
 def ensure_tables_exist():
@@ -362,3 +544,5 @@ def ensure_tables_exist():
             init_postgres_tables()
         except Exception as e:
             print(f"Warning: PostgreSQL table creation failed: {e}")
+    else:
+        init_sqlite_tables()
