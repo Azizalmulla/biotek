@@ -3,6 +3,23 @@ BioTeK FastAPI Backend
 Privacy-preserving disease risk prediction API
 """
 
+# Fix pickle module reference for Railway deployment
+# Models were pickled with references to ml.train_real_data.RealDiseaseModel
+# We need to make that class available under the expected module path
+import sys
+from types import ModuleType
+
+# Create fake 'ml' module hierarchy for pickle compatibility
+ml_module = ModuleType('ml')
+ml_train_real_data = ModuleType('ml.train_real_data')
+sys.modules['ml'] = ml_module
+sys.modules['ml.train_real_data'] = ml_train_real_data
+
+# Import the actual class and make it available under the expected name
+from disease_model import RealDiseaseModel
+ml_train_real_data.RealDiseaseModel = RealDiseaseModel
+ml_module.train_real_data = ml_train_real_data
+
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
