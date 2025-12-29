@@ -304,6 +304,43 @@ def init_postgres_tables():
                 )
             """)
             
+            # Data exchange requests
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS data_exchange_requests (
+                    exchange_id TEXT PRIMARY KEY,
+                    patient_id TEXT NOT NULL,
+                    requesting_institution TEXT NOT NULL,
+                    sending_institution TEXT NOT NULL,
+                    purpose TEXT NOT NULL,
+                    categories TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    requested_by TEXT NOT NULL,
+                    requested_at TEXT NOT NULL,
+                    patient_consent_status TEXT,
+                    patient_consent_at TEXT,
+                    approved_by TEXT,
+                    approved_at TEXT,
+                    sent_at TEXT,
+                    received_at TEXT,
+                    expires_at TEXT,
+                    denial_reason TEXT
+                )
+            """)
+            
+            # Insert demo staff account if not exists
+            cursor.execute("""
+                INSERT INTO staff_accounts (user_id, email, password_hash, role, full_name, created_at, activated)
+                VALUES ('doctor_DOC001', 'doctor@biotek.demo', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.rMvvlRQFVpLpGy', 'doctor', 'Demo Doctor', '2025-01-01', TRUE)
+                ON CONFLICT (user_id) DO NOTHING
+            """)
+            
+            # Insert demo admin account if not exists
+            cursor.execute("""
+                INSERT INTO admin_accounts (admin_id, email, password_hash, full_name, created_at, super_admin)
+                VALUES ('admin_ADM001', 'admin@biotek.demo', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.rMvvlRQFVpLpGy', 'Demo Admin', '2025-01-01', TRUE)
+                ON CONFLICT (admin_id) DO NOTHING
+            """)
+            
             conn.commit()
             print("✓ PostgreSQL tables initialized")
 
@@ -314,3 +351,14 @@ if USE_POSTGRES:
         init_postgres_tables()
     except Exception as e:
         print(f"Warning: Failed to initialize PostgreSQL tables: {e}")
+        print("Falling back to SQLite...")
+        USE_POSTGRES = False
+
+
+def ensure_tables_exist():
+    """Ensure all required tables exist - call this before first database operation"""
+    if USE_POSTGRES:
+        try:
+            init_postgres_tables()
+        except Exception as e:
+            print(f"Warning: PostgreSQL table creation failed: {e}")
