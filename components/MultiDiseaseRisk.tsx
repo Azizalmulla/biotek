@@ -18,7 +18,7 @@ interface DiseaseRisk {
   name: string;
   risk_score: number;
   risk_percentage: number;
-  risk_category: 'HIGH' | 'MODERATE' | 'LOW' | 'MINIMAL';
+  risk_category: 'VERY_HIGH' | 'HIGH' | 'MODERATE' | 'LOW' | 'MINIMAL';
   confidence: number;
   top_factors: { feature: string; importance: number; value: number }[];
   calibration?: CalibrationData;
@@ -364,6 +364,7 @@ export default function MultiDiseaseRisk({
 
   const getRiskColor = (category: string) => {
     switch (category) {
+      case 'VERY_HIGH': return 'from-rose-600 to-red-700';
       case 'HIGH': return 'from-red-500 to-red-600';
       case 'MODERATE': return 'from-amber-500 to-orange-500';
       case 'LOW': return 'from-emerald-500 to-green-600';
@@ -373,6 +374,7 @@ export default function MultiDiseaseRisk({
 
   const getRiskBg = (category: string) => {
     switch (category) {
+      case 'VERY_HIGH': return 'bg-rose-50 border-rose-300';
       case 'HIGH': return 'bg-red-50 border-red-200';
       case 'MODERATE': return 'bg-amber-50 border-amber-200';
       case 'LOW': return 'bg-emerald-50 border-emerald-200';

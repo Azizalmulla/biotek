@@ -108,15 +108,23 @@ def get_risk_category_score2(risk: float, age: float, disease_id: str) -> RiskCa
     thresholds = SCORE2_THRESHOLDS[age_group]["thresholds"]
     modifier = DISEASE_THRESHOLD_MODIFIERS.get(disease_id, 1.0)
     
-    # Apply disease-specific modifier to thresholds
-    for category, (low, high) in thresholds.items():
-        adjusted_low = low * modifier
-        adjusted_high = high * modifier
-        if adjusted_low <= risk < adjusted_high:
-            return RiskCategory[category]
+    # Get adjusted thresholds
+    t_minimal = thresholds["MINIMAL"][1] * modifier
+    t_low = thresholds["LOW"][1] * modifier
+    t_moderate = thresholds["MODERATE"][1] * modifier
+    t_high = thresholds["HIGH"][1] * modifier
     
-    # Default to HIGH if above all thresholds
-    return RiskCategory.HIGH if risk >= 0.5 else RiskCategory.MODERATE
+    # Explicit ordered comparisons (most reliable)
+    if risk < t_minimal:
+        return RiskCategory.MINIMAL
+    elif risk < t_low:
+        return RiskCategory.LOW
+    elif risk < t_moderate:
+        return RiskCategory.MODERATE
+    elif risk < t_high:
+        return RiskCategory.HIGH
+    else:
+        return RiskCategory.VERY_HIGH
 
 
 # =============================================================================
