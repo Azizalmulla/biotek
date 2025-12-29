@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 
-// Hardcoded for production - env vars not working with Vercel cache
+// Hardcoded for production
 const API_BASE = 'https://biotek-production.up.railway.app';
+console.log('🔥 LOGIN PAGE LOADED - API_BASE:', API_BASE);
+console.log('🔥 BUILD TIME:', new Date().toISOString());
 
 const roles = [
   {
