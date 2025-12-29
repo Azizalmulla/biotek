@@ -1,6 +1,7 @@
 """
 Database abstraction layer for BioTeK
 Supports both PostgreSQL (production) and SQLite (local development)
+Falls back to SQLite if PostgreSQL connection fails
 """
 
 import os
@@ -8,17 +9,25 @@ import sqlite3
 from contextlib import contextmanager
 from typing import Optional, List, Tuple, Any
 
-# Check if PostgreSQL is available
+# Check if PostgreSQL is available and working
 DATABASE_URL = os.getenv('DATABASE_URL')
+USE_POSTGRES = False
 
 if DATABASE_URL:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-    USE_POSTGRES = True
-    print(f"✓ Using PostgreSQL database")
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        # Test the connection
+        test_conn = psycopg2.connect(DATABASE_URL)
+        test_conn.close()
+        USE_POSTGRES = True
+        print(f"✓ Using PostgreSQL database (connection successful)")
+    except Exception as e:
+        print(f"⚠ PostgreSQL connection failed: {e}")
+        print("✓ Falling back to SQLite database")
+        USE_POSTGRES = False
 else:
-    USE_POSTGRES = False
-    print("✓ Using SQLite database (local development)")
+    print("✓ Using SQLite database (no DATABASE_URL set)")
 
 # SQLite database path for local development
 SQLITE_DB_PATH = "biotek_audit.db"
