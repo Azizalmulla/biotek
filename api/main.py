@@ -176,9 +176,21 @@ LLM_MODEL = "GLM-4.5V"
 LLM_PROVIDER = "OpenRouter"
 
 # Real trained disease models (XGBoost + LightGBM)
-# Use absolute path relative to this file's location
-API_DIR = Path(__file__).parent
-REAL_MODELS_DIR = API_DIR.parent / "models"
+# Try multiple possible paths for Railway compatibility
+API_DIR = Path(__file__).parent.resolve()
+_possible_model_dirs = [
+    API_DIR.parent / "models",  # When running from api/
+    API_DIR / "models",         # If models are in api/models/
+    Path("models"),             # Relative to cwd
+    Path("/app/models"),        # Railway typical path
+]
+REAL_MODELS_DIR = None
+for _dir in _possible_model_dirs:
+    if _dir.exists() and (_dir / "real_type2_diabetes_model.pkl").exists():
+        REAL_MODELS_DIR = _dir
+        break
+if REAL_MODELS_DIR is None:
+    REAL_MODELS_DIR = API_DIR.parent / "models"  # Default fallback
 real_disease_models = {}
 real_models_metadata = None
 
