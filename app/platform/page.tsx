@@ -790,109 +790,199 @@ export default function PlatformPage() {
                     )}
                   </div>
 
-                  {/* Disease Progression Simulator */}
+                  {/* Risk Factor Impact Calculator */}
                   <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8 border border-black/10">
                     <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center gap-3">
-                        <span className="text-3xl">📈</span>
+                        <span className="text-3xl">🎯</span>
                         <div>
-                          <h3 className="text-xl font-bold text-black">Disease Progression Prediction</h3>
-                          <p className="text-sm text-black/60">5-year risk trajectory with AI-optimized intervention</p>
+                          <h3 className="text-xl font-bold text-black">Risk Factor Impact Analysis</h3>
+                          <p className="text-sm text-black/60">Modifiable factors ranked by potential risk reduction</p>
                         </div>
                       </div>
-                      {!progression && (
-                        <button
-                          onClick={async () => {
-                            try {
-                              // Get data from multiDiseaseData.input_data or prediction or defaults
+                      {multiDiseaseData && (
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-green-600">
+                            -{(() => {
                               const inputData = multiDiseaseData?.input_data || {};
-                              const featureData = prediction?.feature_importance || {};
-                              
-                              const response = await fetch(`${API_BASE}/ai/predict-progression`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  patient_data: {
-                                    age: inputData.age || featureData.age || 55,
-                                    bmi: inputData.bmi || featureData.bmi || 27.5,
-                                    hba1c: inputData.hba1c || featureData.hba1c || 5.7,
-                                    ldl: inputData.ldl || featureData.ldl || 120,
-                                    smoking: inputData.smoking_pack_years || featureData.smoking || 0
-                                  }
-                                })
-                              });
-                              const data = await response.json();
-                              console.log('Progression data:', data);
-                              setProgression(data);
-                            } catch (error) {
-                              console.error('Failed to load progression:', error);
-                              alert('Failed to generate progression. Check console.');
-                            }
-                          }}
-                          className="bg-black text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-stone-800"
-                        >
-                          ✨ Generate Prediction
-                        </button>
+                              let total = 0;
+                              if (inputData.bmi > 25) total += Math.min(12, Math.round((inputData.bmi - 25) * 2.4));
+                              if (inputData.hba1c > 5.7) total += Math.min(15, Math.round((inputData.hba1c - 5.4) * 5));
+                              if (inputData.bp_systolic > 120) total += Math.min(10, Math.round((inputData.bp_systolic - 120) * 0.5));
+                              if (inputData.ldl > 100) total += Math.min(8, Math.round((inputData.ldl - 100) * 0.16));
+                              if (inputData.smoking_pack_years > 0) total += Math.min(15, inputData.smoking_pack_years);
+                              if ((inputData.exercise_hours_weekly || 0) < 5) total += Math.round((5 - (inputData.exercise_hours_weekly || 0)) * 1.5);
+                              return Math.min(45, total);
+                            })()}%
+                          </div>
+                          <div className="text-xs text-black/50">Potential Risk Reduction</div>
+                        </div>
                       )}
                     </div>
 
-                    {progression && progression.without_intervention && progression.with_intervention && (
-                      <div className="space-y-6">
-                        <div className="grid grid-cols-2 gap-6">
-                          {/* Without Intervention */}
-                          <div className="bg-red-50 rounded-2xl p-6 border border-red-100">
-                            <h4 className="font-bold text-black mb-4">❌ Without Intervention</h4>
-                            <div className="space-y-3">
-                              {progression.without_intervention.map((point: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between">
-                                  <span className="text-sm text-black/70">{point.year}</span>
-                                  <div className="flex-1 mx-4">
+                    {multiDiseaseData ? (
+                      <div className="space-y-4">
+                        {/* Risk Factors - Sorted by Impact */}
+                        {(() => {
+                          const inputData = multiDiseaseData?.input_data || {};
+                          const factors = [
+                            {
+                              name: 'HbA1c',
+                              current: inputData.hba1c || 5.7,
+                              target: 5.4,
+                              unit: '%',
+                              impact: inputData.hba1c > 5.7 ? Math.min(15, Math.round((inputData.hba1c - 5.4) * 5)) : 0,
+                              status: inputData.hba1c <= 5.4 ? 'optimal' : inputData.hba1c <= 5.7 ? 'elevated' : 'high',
+                              action: inputData.hba1c > 5.7 ? 'Reduce refined carbs, increase fiber, consider metformin if prediabetic' : 'Maintain current glycemic control',
+                              icon: '🩸'
+                            },
+                            {
+                              name: 'BMI',
+                              current: inputData.bmi || 27.5,
+                              target: 25.0,
+                              unit: 'kg/m²',
+                              impact: inputData.bmi > 25 ? Math.min(12, Math.round((inputData.bmi - 25) * 2.4)) : 0,
+                              status: inputData.bmi <= 25 ? 'optimal' : inputData.bmi <= 30 ? 'elevated' : 'high',
+                              action: inputData.bmi > 25 ? `Lose ${Math.round((inputData.bmi - 25) * 2.5)}kg through caloric deficit (500kcal/day)` : 'Maintain healthy weight',
+                              icon: '⚖️'
+                            },
+                            {
+                              name: 'Blood Pressure',
+                              current: inputData.bp_systolic || 130,
+                              target: 120,
+                              unit: 'mmHg',
+                              impact: inputData.bp_systolic > 120 ? Math.min(10, Math.round((inputData.bp_systolic - 120) * 0.5)) : 0,
+                              status: inputData.bp_systolic <= 120 ? 'optimal' : inputData.bp_systolic <= 130 ? 'elevated' : 'high',
+                              action: inputData.bp_systolic > 120 ? 'DASH diet, reduce sodium <2000mg/day, consider ACE inhibitor' : 'Continue BP monitoring',
+                              icon: '💓'
+                            },
+                            {
+                              name: 'LDL Cholesterol',
+                              current: inputData.ldl || 120,
+                              target: 100,
+                              unit: 'mg/dL',
+                              impact: inputData.ldl > 100 ? Math.min(8, Math.round((inputData.ldl - 100) * 0.16)) : 0,
+                              status: inputData.ldl <= 100 ? 'optimal' : inputData.ldl <= 130 ? 'elevated' : 'high',
+                              action: inputData.ldl > 100 ? 'Statin therapy, reduce saturated fat, increase omega-3' : 'Maintain lipid profile',
+                              icon: '🫀'
+                            },
+                            {
+                              name: 'Smoking',
+                              current: inputData.smoking_pack_years || 0,
+                              target: 0,
+                              unit: 'pack-years',
+                              impact: inputData.smoking_pack_years > 0 ? Math.min(15, inputData.smoking_pack_years) : 0,
+                              status: inputData.smoking_pack_years === 0 ? 'optimal' : 'high',
+                              action: inputData.smoking_pack_years > 0 ? 'Smoking cessation program, NRT or varenicline' : 'Non-smoker ✓',
+                              icon: '🚭'
+                            },
+                            {
+                              name: 'Exercise',
+                              current: inputData.exercise_hours_weekly || 2.5,
+                              target: 5,
+                              unit: 'hrs/week',
+                              impact: (inputData.exercise_hours_weekly || 0) < 5 ? Math.round((5 - (inputData.exercise_hours_weekly || 0)) * 1.5) : 0,
+                              status: (inputData.exercise_hours_weekly || 0) >= 5 ? 'optimal' : (inputData.exercise_hours_weekly || 0) >= 2.5 ? 'elevated' : 'high',
+                              action: (inputData.exercise_hours_weekly || 0) < 5 ? `Add ${Math.round(5 - (inputData.exercise_hours_weekly || 0))} more hrs/week moderate activity` : 'Excellent activity level',
+                              icon: '🏃'
+                            }
+                          ].sort((a, b) => b.impact - a.impact);
+
+                          return factors.map((factor, idx) => (
+                            <div 
+                              key={factor.name}
+                              className={`p-4 rounded-2xl border transition-all ${
+                                factor.status === 'optimal' 
+                                  ? 'bg-emerald-50 border-emerald-200' 
+                                  : factor.status === 'elevated'
+                                  ? 'bg-amber-50 border-amber-200'
+                                  : 'bg-red-50 border-red-200'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-start gap-3 flex-1">
+                                  <span className="text-2xl">{factor.icon}</span>
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="font-bold text-black">{factor.name}</span>
+                                      {factor.impact > 0 && (
+                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded-full">
+                                          -{factor.impact}% risk
+                                        </span>
+                                      )}
+                                      {factor.status === 'optimal' && (
+                                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">
+                                          ✓ Optimal
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-4 text-sm mb-2">
+                                      <span className={`font-medium ${factor.status === 'optimal' ? 'text-emerald-700' : factor.status === 'elevated' ? 'text-amber-700' : 'text-red-700'}`}>
+                                        Current: {factor.current} {factor.unit}
+                                      </span>
+                                      {factor.status !== 'optimal' && (
+                                        <>
+                                          <span className="text-black/30">→</span>
+                                          <span className="text-emerald-600 font-medium">Target: {factor.target} {factor.unit}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-black/60">{factor.action}</p>
+                                  </div>
+                                </div>
+                                {factor.impact > 0 && (
+                                  <div className="w-24 ml-4">
                                     <div className="h-2 bg-black/10 rounded-full overflow-hidden">
-                                      <div
-                                        className="h-full bg-gradient-to-r from-orange-400 to-red-500 rounded-full"
-                                        style={{ width: `${point.risk}%` }}
+                                      <div 
+                                        className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full transition-all"
+                                        style={{ width: `${Math.min(100, factor.impact * 6.67)}%` }}
                                       />
                                     </div>
                                   </div>
-                                  <span className="text-sm font-bold text-red-600">{point.risk}%</span>
-                                </div>
-                              ))}
+                                )}
+                              </div>
                             </div>
-                          </div>
+                          ));
+                        })()}
 
-                          {/* With Intervention */}
-                          <div className="bg-emerald-50 rounded-2xl p-6 border border-emerald-100">
-                            <h4 className="font-bold text-black mb-4">✅ With AI-Optimized Plan</h4>
-                            <div className="space-y-3">
-                              {progression.with_intervention.map((point: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between">
-                                  <span className="text-sm text-black/70">{point.year}</span>
-                                  <div className="flex-1 mx-4">
-                                    <div className="h-2 bg-black/10 rounded-full overflow-hidden">
-                                      <div
-                                        className="h-full bg-gradient-to-r from-emerald-400 to-green-500 rounded-full"
-                                        style={{ width: `${point.risk}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                  <span className="text-sm font-bold text-green-600">{point.risk}%</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-stone-50 rounded-2xl p-6 border border-stone-200">
-                          <div className="flex items-center gap-3">
-                            <span className="text-2xl">💡</span>
+                        {/* Summary Card */}
+                        <div className="bg-gradient-to-r from-stone-100 to-stone-50 rounded-2xl p-6 border border-stone-200 mt-6">
+                          <div className="flex items-start gap-4">
+                            <span className="text-3xl">📋</span>
                             <div>
-                              <h4 className="font-bold text-black mb-1">Impact of Intervention</h4>
-                              <p className="text-sm text-black/70">
-                                AI-optimized treatment can reduce risk by <span className="font-bold text-green-600">{progression.impact.risk_reduction}%</span> ({progression.impact.risk_reduction_pct}% reduction) over 5 years
+                              <h4 className="font-bold text-black mb-2">Clinical Priority Order</h4>
+                              <p className="text-sm text-black/70 mb-3">
+                                Based on this patient's profile, address modifiable factors in order of impact. 
+                                Combined interventions could reduce overall disease risk by up to{' '}
+                                <span className="font-bold text-green-600">
+                                  {(() => {
+                                    const inputData = multiDiseaseData?.input_data || {};
+                                    let total = 0;
+                                    if (inputData.bmi > 25) total += Math.min(12, Math.round((inputData.bmi - 25) * 2.4));
+                                    if (inputData.hba1c > 5.7) total += Math.min(15, Math.round((inputData.hba1c - 5.4) * 5));
+                                    if (inputData.bp_systolic > 120) total += Math.min(10, Math.round((inputData.bp_systolic - 120) * 0.5));
+                                    if (inputData.ldl > 100) total += Math.min(8, Math.round((inputData.ldl - 100) * 0.16));
+                                    if (inputData.smoking_pack_years > 0) total += Math.min(15, inputData.smoking_pack_years);
+                                    if ((inputData.exercise_hours_weekly || 0) < 5) total += Math.round((5 - (inputData.exercise_hours_weekly || 0)) * 1.5);
+                                    return Math.min(45, total);
+                                  })()}%
+                                </span>.
                               </p>
+                              <div className="flex flex-wrap gap-2">
+                                {['lifestyle', 'medication', 'monitoring'].map(tag => (
+                                  <span key={tag} className="px-2 py-1 bg-white rounded-full text-xs font-medium text-black/60 border border-black/10">
+                                    {tag === 'lifestyle' ? '🥗 Lifestyle' : tag === 'medication' ? '💊 Medication' : '📊 Monitoring'}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-black/50">
+                        <span className="text-4xl mb-4 block">📊</span>
+                        Run a risk prediction first to see personalized risk factor analysis
                       </div>
                     )}
                   </div>
