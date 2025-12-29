@@ -14,6 +14,7 @@ import VariantAnalyzer from '@/components/VariantAnalyzer';
 import MedicalImagingUpload from '@/components/MedicalImagingUpload';
 import MultiDiseaseRisk from '@/components/MultiDiseaseRisk';
 import AdvancedMedicalImaging from '@/components/AdvancedMedicalImaging';
+import DataExchange from '@/components/DataExchange';
 
 const API_BASE = 'https://biotek-production.up.railway.app';
 
@@ -21,7 +22,7 @@ export default function PlatformPage() {
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
   const [consent, setConsent] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'predict' | 'dna-analysis' | 'medical-imaging' | 'ai-insights' | 'federated' | 'audit'>('predict');
+  const [activeTab, setActiveTab] = useState<'predict' | 'dna-analysis' | 'medical-imaging' | 'ai-insights' | 'federated' | 'data-exchange' | 'audit'>('predict');
   const [prediction, setPrediction] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -58,6 +59,10 @@ export default function PlatformPage() {
   // Multi-disease predictions state
   const [multiDiseaseData, setMultiDiseaseData] = useState<any>(null);
   const [loadingMultiDisease, setLoadingMultiDisease] = useState(false);
+  
+  // Patient history state
+  const [patientHistory, setPatientHistory] = useState<any>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   
   // Patient-specific chat memory
   const [patientChatHistories, setPatientChatHistories] = useState<Record<string, Array<{role: 'user' | 'assistant', content: string, timestamp?: string}>>>({});
@@ -261,6 +266,107 @@ export default function PlatformPage() {
       setAuditLogs(data);
     } catch (error) {
       console.error('Failed to load audit logs:', error);
+    }
+  };
+
+  // Load patient history when patient changes
+  const loadPatientHistory = async (patientId: string) => {
+    if (!patientId) return;
+    setLoadingHistory(true);
+    try {
+      const response = await fetch(`${API_BASE}/patient/${patientId}/history`, {
+        headers: {
+          'X-User-ID': session?.userId || 'doctor_session',
+          'X-User-Role': session?.role || 'doctor'
+        }
+      });
+      const data = await response.json();
+      setPatientHistory(data);
+      
+      // If there's existing prediction data, load it
+      if (data.predictions && data.predictions.length > 0) {
+        const lastPrediction = data.predictions[0].data;
+        if (lastPrediction) {
+          setPrediction(lastPrediction);
+          setMultiDiseaseData(lastPrediction);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load patient history:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  // Save prediction results to patient record
+  const savePatientPrediction = async (patientId: string, predictionData: any) => {
+    if (!patientId) return;
+    try {
+      await fetch(`${API_BASE}/patient/${patientId}/prediction-results`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': session?.userId || 'doctor_session',
+          'X-User-Role': session?.role || 'doctor'
+        },
+        body: JSON.stringify(predictionData)
+      });
+    } catch (error) {
+      console.error('Failed to save prediction:', error);
+    }
+  };
+
+  // Save variant result to patient record
+  const savePatientVariant = async (patientId: string, variantData: any) => {
+    if (!patientId) return;
+    try {
+      await fetch(`${API_BASE}/patient/${patientId}/variant-result`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': session?.userId || 'doctor_session',
+          'X-User-Role': session?.role || 'doctor'
+        },
+        body: JSON.stringify(variantData)
+      });
+    } catch (error) {
+      console.error('Failed to save variant result:', error);
+    }
+  };
+
+  // Save treatment to patient record
+  const savePatientTreatment = async (patientId: string, treatmentData: any) => {
+    if (!patientId) return;
+    try {
+      await fetch(`${API_BASE}/patient/${patientId}/treatment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': session?.userId || 'doctor_session',
+          'X-User-Role': session?.role || 'doctor'
+        },
+        body: JSON.stringify({ treatment_type: 'ai_protocol', protocol_summary: 'AI-generated treatment protocol', ...treatmentData })
+      });
+    } catch (error) {
+      console.error('Failed to save treatment:', error);
+    }
+  };
+
+  // Save clinical reasoning to patient record
+  const savePatientClinicalReasoning = async (patientId: string, reasoningData: any) => {
+    if (!patientId) return;
+    try {
+      await fetch(`${API_BASE}/patient/${patientId}/clinical-reasoning`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': session?.userId || 'doctor_session',
+          'X-User-Role': session?.role || 'doctor'
+        },
+        body: JSON.stringify(reasoningData)
+      });
+    } catch (error) {
+      console.error('Failed to save clinical reasoning:', error);
     }
   };
 
@@ -609,6 +715,7 @@ export default function PlatformPage() {
               { id: 'medical-imaging', label: 'Medical Imaging', icon: '👁️' },
               { id: 'ai-insights', label: 'AI Clinical Intelligence', icon: '🧠' },
               { id: 'federated', label: 'Federated Network', icon: '🔗' },
+              { id: 'data-exchange', label: 'Data Exchange', icon: '🏥' },
               { id: 'audit', label: 'Audit Trail', icon: '📋' },
             ].map((tab) => (
               <button
@@ -633,9 +740,55 @@ export default function PlatformPage() {
         {/* Patient Selector - Always visible for doctors/nurses */}
         {session && ['doctor', 'nurse'].includes(session.role) && (
           <PatientSelector 
-            onSelect={setCurrentPatientId}
+            onSelect={(patientId) => {
+              setCurrentPatientId(patientId);
+              if (patientId) {
+                loadPatientHistory(patientId);
+              } else {
+                setPatientHistory(null);
+              }
+            }}
             currentPatientId={currentPatientId || undefined}
           />
+        )}
+        
+        {/* Patient History Indicator */}
+        {currentPatientId && patientHistory && patientHistory.summary?.total_records > 0 && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📁</span>
+                <div>
+                  <h3 className="font-semibold text-blue-900">Patient Records Found</h3>
+                  <p className="text-sm text-blue-700">
+                    {patientHistory.summary.total_records} record(s) for {currentPatientId}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 text-xs">
+                {patientHistory.summary.has_predictions && (
+                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">🎯 Predictions</span>
+                )}
+                {patientHistory.summary.has_variants && (
+                  <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full">🧬 Variants</span>
+                )}
+                {patientHistory.summary.has_imaging && (
+                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full">👁️ Imaging</span>
+                )}
+                {patientHistory.summary.has_treatments && (
+                  <span className="bg-amber-100 text-amber-800 px-2 py-1 rounded-full">💊 Treatments</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Loading History Indicator */}
+        {loadingHistory && (
+          <div className="mb-6 bg-stone-50 border border-stone-200 rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-stone-400 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-stone-600">Loading patient history...</span>
+          </div>
         )}
 
         <AnimatePresence mode="wait">
@@ -651,6 +804,10 @@ export default function PlatformPage() {
                 onPredictionComplete={(data) => {
                   setPrediction(data);
                   setMultiDiseaseData(data);
+                  // Auto-save prediction to patient record
+                  if (currentPatientId) {
+                    savePatientPrediction(currentPatientId, data);
+                  }
                 }}
                 patientId={currentPatientId}
                 userId={session?.userId}
@@ -668,7 +825,15 @@ export default function PlatformPage() {
               exit={{ opacity: 0, y: -20 }}
               className="max-w-4xl mx-auto"
             >
-              <VariantAnalyzer />
+              <VariantAnalyzer 
+                patientId={currentPatientId}
+                onResultSaved={() => {
+                  // Refresh patient history after saving
+                  if (currentPatientId) {
+                    loadPatientHistory(currentPatientId);
+                  }
+                }}
+              />
             </motion.div>
           )}
 
@@ -865,6 +1030,10 @@ export default function PlatformPage() {
                               });
                               const data = await response.json();
                               setClinicalReasoning(data);
+                              // Auto-save to patient record
+                              if (currentPatientId) {
+                                savePatientClinicalReasoning(currentPatientId, data);
+                              }
                             } catch (error) {
                               console.error('Clinical reasoning failed:', error);
                               setClinicalReasoning({ error: 'Failed to generate clinical reasoning. Please try again.' });
@@ -1063,6 +1232,10 @@ export default function PlatformPage() {
                               const data = await response.json();
                               console.log('Treatment data:', data);
                               setTreatment(data);
+                              // Auto-save to patient record
+                              if (currentPatientId) {
+                                savePatientTreatment(currentPatientId, data);
+                              }
                             } catch (error) {
                               console.error('Treatment optimization failed:', error);
                               alert('Failed to generate treatment. Check console.');
@@ -1220,6 +1393,23 @@ export default function PlatformPage() {
               exit={{ opacity: 0, y: -20 }}
             >
               <FederatedStatus />
+            </motion.div>
+          )}
+
+          {/* Data Exchange Tab */}
+          {activeTab === 'data-exchange' && (
+            <motion.div
+              key="data-exchange"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="max-w-4xl mx-auto"
+            >
+              <DataExchange 
+                patientId={currentPatientId}
+                userId={session?.userId}
+                userRole={session?.role}
+              />
             </motion.div>
           )}
 

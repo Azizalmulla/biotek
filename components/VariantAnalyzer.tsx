@@ -61,12 +61,32 @@ const EXAMPLE_VARIANTS = [
   },
 ];
 
-export default function VariantAnalyzer() {
+interface VariantAnalyzerProps {
+  patientId?: string | null;
+  onResultSaved?: (result: VariantResult) => void;
+}
+
+export default function VariantAnalyzer({ patientId, onResultSaved }: VariantAnalyzerProps) {
   const [variantInput, setVariantInput] = useState('');
   const [selectedGene, setSelectedGene] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<VariantResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Save result to patient record
+  const saveToPatientRecord = async (variantData: VariantResult) => {
+    if (!patientId) return;
+    try {
+      await fetch(`${API_BASE}/patient/${patientId}/variant-result`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(variantData)
+      });
+      onResultSaved?.(variantData);
+    } catch (err) {
+      console.error('Failed to save variant result:', err);
+    }
+  };
 
   const handleExampleSelect = (example: typeof EXAMPLE_VARIANTS[0]) => {
     setVariantInput(example.variant);
@@ -100,6 +120,10 @@ export default function VariantAnalyzer() {
 
       const data = await response.json();
       setResult(data);
+      // Auto-save to patient record if patient ID is provided
+      if (patientId) {
+        saveToPatientRecord(data);
+      }
     } catch (err: any) {
       console.error('Variant analysis failed:', err);
       setError(err.message || 'Failed to analyze variant. Please try again.');
