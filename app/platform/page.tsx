@@ -1089,14 +1089,123 @@ export default function PlatformPage() {
 
                     {treatment && (
                       <div className="space-y-4">
-                        <div className="bg-emerald-50 rounded-2xl p-6 border border-emerald-100">
-                          <div className="whitespace-pre-wrap text-sm text-black/80 leading-relaxed">
-                            {treatment.treatment_protocol}
-                          </div>
+                        {/* Render treatment protocol with proper formatting */}
+                        <div className="space-y-4">
+                          {treatment.treatment_protocol.split(/(?=#{1,4}\s|\*\*Phase|\*\*PHASE|---)/g).map((section: string, idx: number) => {
+                            const trimmed = section.trim();
+                            if (!trimmed) return null;
+                            
+                            // Main headers (###)
+                            if (trimmed.startsWith('### ') || trimmed.startsWith('## ')) {
+                              const title = trimmed.replace(/^#{2,3}\s+/, '').replace(/\*\*/g, '');
+                              return (
+                                <div key={idx} className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl p-5 mt-4">
+                                  <h3 className="text-lg font-bold">{title.split('\n')[0]}</h3>
+                                  {title.includes('*') && (
+                                    <p className="text-blue-100 text-sm mt-1">{title.split('\n').slice(1).join(' ').replace(/\*/g, '')}</p>
+                                  )}
+                                </div>
+                              );
+                            }
+                            
+                            // Phase headers
+                            if (trimmed.includes('**Phase') || trimmed.includes('**PHASE') || trimmed.startsWith('#### ')) {
+                              const lines = trimmed.split('\n');
+                              const phaseTitle = lines[0].replace(/[#*]/g, '').trim();
+                              const phaseNum = phaseTitle.match(/Phase\s*(\d)/i)?.[1] || '1';
+                              const colors = {
+                                '1': 'from-emerald-500 to-green-600',
+                                '2': 'from-amber-500 to-orange-500', 
+                                '3': 'from-blue-500 to-cyan-500'
+                              };
+                              return (
+                                <div key={idx} className={`bg-gradient-to-r ${colors[phaseNum as keyof typeof colors] || 'from-gray-500 to-gray-600'} text-white rounded-2xl p-5 mt-6`}>
+                                  <div className="flex items-center gap-3">
+                                    <span className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-xl font-bold">{phaseNum}</span>
+                                    <div>
+                                      <h4 className="font-bold text-lg">{phaseTitle}</h4>
+                                      {lines[1] && <p className="text-white/80 text-sm">{lines[1].replace(/\*\*/g, '').replace(/Goal:|Initiation Criteria:/i, '').trim()}</p>}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            
+                            // Tables and content
+                            if (trimmed.includes('|')) {
+                              const rows = trimmed.split('\n').filter(r => r.includes('|') && !r.match(/^\|[-:]+\|/));
+                              return (
+                                <div key={idx} className="bg-white rounded-2xl border border-black/10 overflow-hidden">
+                                  {rows.map((row, rowIdx) => {
+                                    const cells = row.split('|').filter(c => c.trim());
+                                    const isHeader = rowIdx === 0;
+                                    return (
+                                      <div key={rowIdx} className={`grid grid-cols-2 ${isHeader ? 'bg-stone-100 font-semibold' : 'border-t border-black/5'}`}>
+                                        {cells.map((cell, cellIdx) => (
+                                          <div key={cellIdx} className={`p-4 text-sm ${cellIdx === 0 ? 'font-medium text-black' : 'text-black/70'}`}>
+                                            {cell.replace(/\*\*/g, '').replace(/<br>/g, '\n').split('\n').map((line, lineIdx) => (
+                                              <div key={lineIdx} className={lineIdx > 0 ? 'mt-1' : ''}>{line.replace(/^-\s*/, '• ').trim()}</div>
+                                            ))}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            }
+                            
+                            // Confidence levels and other content
+                            if (trimmed.includes('Confidence Level') || trimmed.includes('**Confidence')) {
+                              const level = trimmed.match(/High|Moderate|Low/i)?.[0] || 'Moderate';
+                              const colors = { High: 'bg-green-100 text-green-800', Moderate: 'bg-amber-100 text-amber-800', Low: 'bg-red-100 text-red-800' };
+                              return (
+                                <div key={idx} className={`${colors[level as keyof typeof colors]} rounded-xl p-4 text-sm flex items-center gap-2`}>
+                                  <span className="text-lg">{level === 'High' ? '✅' : level === 'Moderate' ? '⚠️' : '❌'}</span>
+                                  <span>{trimmed.replace(/\*\*/g, '').replace(/Confidence Level:?/i, 'Confidence:')}</span>
+                                </div>
+                              );
+                            }
+                            
+                            // Key Considerations section
+                            if (trimmed.includes('Key Considerations') || trimmed.includes('Considerations')) {
+                              return (
+                                <div key={idx} className="bg-amber-50 rounded-2xl p-5 border border-amber-200 mt-4">
+                                  <h4 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
+                                    <span>⚡</span> Key Considerations
+                                  </h4>
+                                  <div className="space-y-2 text-sm text-amber-800">
+                                    {trimmed.split('\n').filter(l => l.match(/^\d\./)).map((item, i) => (
+                                      <div key={i} className="flex gap-2">
+                                        <span className="font-bold">{i + 1}.</span>
+                                        <span>{item.replace(/^\d+\.\s*/, '').replace(/\*\*/g, '')}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            
+                            // Regular paragraphs
+                            if (trimmed.length > 10 && !trimmed.startsWith('---')) {
+                              return (
+                                <div key={idx} className="bg-stone-50 rounded-xl p-4 text-sm text-black/70 italic">
+                                  {trimmed.replace(/\*/g, '').replace(/^-+$/, '')}
+                                </div>
+                              );
+                            }
+                            
+                            return null;
+                          })}
                         </div>
-                        <div className="flex items-center justify-between text-sm text-black/60">
-                          <span>AI Confidence: {treatment.confidence}%</span>
-                          <span>Based on: {treatment.based_on_patients}</span>
+                        
+                        {/* Footer stats */}
+                        <div className="flex items-center justify-between text-sm bg-stone-100 rounded-xl p-4 mt-4">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                            <span className="text-black/60">AI Confidence: <span className="font-bold text-black">{treatment.confidence}%</span></span>
+                          </div>
+                          <span className="text-black/50">Based on: {treatment.based_on_patients}</span>
                         </div>
                       </div>
                     )}
