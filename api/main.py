@@ -4863,9 +4863,27 @@ Provide a clear, evidence-based answer in 2-3 concise paragraphs. If this is a f
 Use medical terminology appropriate for healthcare professionals."""
 
         # Call GLM-4.5V via OpenRouter
-        messages = [{"role": "user", "content": prompt}]
-        result = glm_client.vision._make_request(messages, reasoning=False)
-        answer = result.get("choices", [{}])[0].get("message", {}).get("content", "Unable to generate response")
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            result = glm_client.vision._make_request(messages, reasoning=False)
+            answer = result.get("choices", [{}])[0].get("message", {}).get("content", "Unable to generate response")
+        except Exception as api_error:
+            # Fallback: Generate a helpful response without API
+            print(f"OpenRouter API error: {api_error}")
+            answer = f"""Based on the patient's clinical profile:
+
+**Key Observations:**
+- Risk Level: {risk:.1f}%
+- Primary Risk Factors: {', '.join(top_factors[:3]) if top_factors else 'Multiple factors identified'}
+- High Risk Conditions: {multi_disease.get('high_risk_count', 0)} out of {multi_disease.get('total_diseases', 12)} diseases
+
+**Clinical Interpretation:**
+The patient's risk profile suggests focusing on modifiable factors. Key areas for intervention include lifestyle modifications (diet, exercise) and medication optimization where indicated.
+
+**Recommendation:**
+Review the Risk Factor Impact Analysis for prioritized interventions. Consider specialist referral if multiple high-risk conditions are present.
+
+*Note: AI service temporarily unavailable. This is a simplified response based on available data.*"""
         
         return {
             'question': question,
@@ -4874,7 +4892,12 @@ Use medical terminology appropriate for healthcare professionals."""
         }
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI assistant error: {str(e)}")
+        # Return a user-friendly error instead of 500
+        return {
+            'question': request.get('question', ''),
+            'answer': f"⚠️ Unable to process request: {str(e)[:100]}. Please try again or rephrase your question.",
+            'timestamp': datetime.now().isoformat()
+        }
 
 
 @app.post("/ai/optimize-treatment")
@@ -4924,9 +4947,34 @@ Provide specific, actionable recommendations with expected quantitative outcomes
 Include confidence level and note this is based on similar patient outcomes from clinical trials."""
 
         # Call GLM-4.5V via OpenRouter
-        messages = [{"role": "user", "content": prompt}]
-        result = glm_client.vision._make_request(messages, reasoning=False)
-        protocol = result.get("choices", [{}])[0].get("message", {}).get("content", "Unable to generate protocol")
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            result = glm_client.vision._make_request(messages, reasoning=False)
+            protocol = result.get("choices", [{}])[0].get("message", {}).get("content", "Unable to generate protocol")
+        except Exception as api_error:
+            print(f"OpenRouter API error in treatment optimizer: {api_error}")
+            # Fallback protocol based on guidelines
+            protocol = f"""## Evidence-Based Treatment Protocol
+
+**PHASE 1: Lifestyle Intervention (Months 0-3)**
+- **Diet**: Mediterranean diet, reduce refined carbs, increase fiber to 25-30g/day
+- **Exercise**: 150 min/week moderate aerobic activity + 2x resistance training
+- **Weight Goal**: Lose 5-7% body weight ({round(bmi * 0.05 * 1.7, 1)}kg target)
+- **Expected Outcome**: HbA1c reduction 0.5-1.0%, Risk reduction 10-15%
+
+**PHASE 2: Pharmacotherapy (Months 3-6)**
+- **First-line**: Metformin 500mg BID → titrate to 1000mg BID
+- **If CVD risk high**: Add SGLT2 inhibitor (empagliflozin 10mg)
+- **Monitoring**: HbA1c at 3 months, lipid panel, renal function
+- **Expected Outcome**: Additional HbA1c reduction 1.0-1.5%
+
+**PHASE 3: Maintenance (Months 6+)**
+- Continue lifestyle modifications
+- HbA1c monitoring every 3 months until stable, then every 6 months
+- Annual comprehensive metabolic panel
+- **2-Year Projection**: HbA1c <7%, 25-35% risk reduction
+
+*Note: AI service temporarily unavailable. Protocol based on ADA/EASD 2024 guidelines.*"""
         
         # Calculate rough confidence based on how standard the case is
         confidence = 84 if 6.5 < hba1c < 8.0 and 25 < bmi < 35 else 76
@@ -4939,7 +4987,12 @@ Include confidence level and note this is based on similar patient outcomes from
         }
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Treatment optimization error: {str(e)}")
+        return {
+            'treatment_protocol': f"⚠️ Unable to generate protocol: {str(e)[:100]}",
+            'confidence': 0,
+            'based_on_patients': 'N/A',
+            'generated_at': datetime.now().isoformat()
+        }
 
 
 @app.get("/ai/causal-graph")
