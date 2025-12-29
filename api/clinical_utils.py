@@ -711,7 +711,7 @@ def calibrate_probability(raw_prob: float, disease_id: str, age: float = 50,
 def apply_sanity_checks(risk: float, disease_id: str, data: dict) -> float:
     """
     Apply physiological sanity checks to prevent obviously wrong predictions.
-    E.g., normal BP shouldn't show high hypertension risk.
+    Based on real epidemiological data and clinical guidelines.
     """
     bp_sys = data.get('bp_systolic', 120)
     bp_dia = data.get('bp_diastolic', 80)
@@ -719,30 +719,153 @@ def apply_sanity_checks(risk: float, disease_id: str, data: dict) -> float:
     bmi = data.get('bmi', 25)
     age = data.get('age', 50)
     hdl = data.get('hdl', 50)
+    sex = data.get('sex', 0)  # 0 = female, 1 = male
+    smoking = data.get('smoking', 0)
+    smoking_pack_years = data.get('smoking_pack_years', 0)
     
-    # HYPERTENSION: Normal BP = low risk regardless of other factors
+    # ==========================================================================
+    # SEX-SPECIFIC DISEASE CONSTRAINTS (CRITICAL FOR ACCURACY)
+    # ==========================================================================
+    
+    # BREAST CANCER: Males have ~100x lower risk (0.1% vs 12% lifetime for females)
+    if disease_id == 'breast_cancer':
+        if sex == 1:  # Male
+            # Male breast cancer is ~1% of all cases
+            # Cap at 1% regardless of other factors
+            return min(risk, 0.01)
+        else:  # Female
+            # Apply age-based constraints for females
+            if age < 30:
+                return min(risk, 0.02)  # Very rare under 30
+            elif age < 40:
+                return min(risk, 0.05)  # Low risk 30-40
+            elif age < 50:
+                return min(risk, 0.10)  # Moderate increase 40-50
+            # 50+ can have higher risk based on other factors
+    
+    # PROSTATE CANCER (if we had it): Only males
+    # if disease_id == 'prostate_cancer' and sex == 0:
+    #     return 0.0  # Women cannot get prostate cancer
+    
+    # ==========================================================================
+    # SMOKING-DEPENDENT DISEASES
+    # ==========================================================================
+    
+    # COPD: Almost exclusively caused by smoking (85-90% of cases)
+    if disease_id == 'copd':
+        is_smoker = smoking > 0 or smoking_pack_years > 0
+        if not is_smoker:
+            if age < 65:
+                return min(risk, 0.02)  # Non-smokers: very low risk (<2%)
+            else:
+                return min(risk, 0.05)  # Elderly non-smokers: slightly higher due to age
+        else:
+            # Smokers: risk scales with pack-years
+            if smoking_pack_years < 10:
+                return min(risk, 0.10)  # Light smoking
+            elif smoking_pack_years < 20:
+                return min(risk, 0.20)  # Moderate smoking
+            # Heavy smokers (20+ pack-years) can have higher risk
+    
+    # ==========================================================================
+    # CARDIOVASCULAR SANITY CHECKS
+    # ==========================================================================
+    
+    # HYPERTENSION: Based on actual BP readings
     if disease_id == 'hypertension':
         if bp_sys < 120 and bp_dia < 80:
-            return min(risk, 0.05)  # Cap at 5% for normal BP
+            return min(risk, 0.05)  # Normal BP: max 5%
         elif bp_sys < 130 and bp_dia < 85:
-            return min(risk, 0.15)  # Cap at 15% for elevated BP
+            return min(risk, 0.12)  # Elevated: max 12%
+        elif bp_sys < 140 and bp_dia < 90:
+            return min(risk, 0.25)  # Stage 1: max 25%
+        # Stage 2+ can have higher risk
     
-    # TYPE 2 DIABETES: Normal HbA1c = low risk
+    # CORONARY HEART DISEASE: Multiple factor constraints
+    if disease_id == 'coronary_heart_disease':
+        # Young + good lipids + non-smoker = very low risk
+        is_smoker = smoking > 0 or smoking_pack_years > 0
+        if age < 40 and hdl >= 50 and not is_smoker:
+            return min(risk, 0.03)  # Max 3%
+        elif age < 50 and hdl >= 60 and not is_smoker:
+            return min(risk, 0.05)  # Max 5%
+        # High HDL is protective
+        if hdl >= 60:
+            risk = risk * 0.7  # 30% reduction
+    
+    # STROKE: Similar constraints
+    if disease_id == 'stroke':
+        is_smoker = smoking > 0 or smoking_pack_years > 0
+        if age < 45 and bp_sys < 130 and not is_smoker:
+            return min(risk, 0.02)  # Very low for young with normal BP
+        elif age < 55 and bp_sys < 140:
+            return min(risk, 0.05)
+        if hdl >= 60:
+            risk = risk * 0.75  # 25% reduction for high HDL
+    
+    # HEART FAILURE: Rarely occurs without other conditions
+    if disease_id == 'heart_failure':
+        if age < 50 and bp_sys < 140 and bmi < 30:
+            return min(risk, 0.03)  # Very rare in healthy young adults
+    
+    # ATRIAL FIBRILLATION: Age is primary driver
+    if disease_id == 'atrial_fibrillation':
+        if age < 40:
+            return min(risk, 0.01)  # Very rare under 40
+        elif age < 50:
+            return min(risk, 0.02)
+        elif age < 60:
+            return min(risk, 0.05)
+    
+    # ==========================================================================
+    # METABOLIC DISEASE CONSTRAINTS
+    # ==========================================================================
+    
+    # TYPE 2 DIABETES: HbA1c is the definitive marker
     if disease_id == 'type2_diabetes':
         if hba1c < 5.7:
-            return min(risk, 0.10)  # Cap at 10% for normal HbA1c
+            return min(risk, 0.08)  # Normal HbA1c: max 8%
         elif hba1c < 6.0:
-            return min(risk, 0.20)  # Cap at 20% for prediabetes threshold
+            return min(risk, 0.15)  # Prediabetes zone: max 15%
+        elif hba1c < 6.5:
+            return min(risk, 0.30)  # High prediabetes: max 30%
+        # HbA1c >= 6.5 is diagnostic, risk can be higher
     
-    # NAFLD: Normal BMI = lower risk
+    # CHRONIC KIDNEY DISEASE: eGFR is key marker
+    if disease_id == 'chronic_kidney_disease':
+        egfr = data.get('egfr', 90)
+        if egfr >= 90:
+            return min(risk, 0.05)  # Normal kidney function
+        elif egfr >= 60:
+            return min(risk, 0.15)  # Mildly reduced
+        # eGFR < 60 indicates actual CKD
+    
+    # NAFLD: BMI and metabolic factors
     if disease_id == 'nafld':
-        if bmi < 25:
-            return min(risk, 0.15)  # Cap for healthy BMI
+        if bmi < 25 and hba1c < 5.7:
+            return min(risk, 0.08)  # Lean + normal glucose: low risk
+        elif bmi < 25:
+            return min(risk, 0.15)  # Lean but other risk factors
     
-    # CVD: High HDL is protective
-    if disease_id in ['coronary_heart_disease', 'stroke']:
-        if hdl >= 60 and age < 50:
-            return risk * 0.7  # 30% reduction for high HDL + young
+    # ==========================================================================
+    # OTHER DISEASE CONSTRAINTS
+    # ==========================================================================
+    
+    # COLORECTAL CANCER: Age is primary driver
+    if disease_id == 'colorectal_cancer':
+        if age < 40:
+            return min(risk, 0.01)  # Very rare under 40
+        elif age < 50:
+            return min(risk, 0.02)  # Low risk under 50
+    
+    # ALZHEIMER'S DISEASE: Very rare before 65
+    if disease_id == 'alzheimers_disease':
+        if age < 50:
+            return min(risk, 0.005)  # Essentially zero
+        elif age < 60:
+            return min(risk, 0.01)
+        elif age < 65:
+            return min(risk, 0.02)
     
     return risk
 

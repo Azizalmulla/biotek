@@ -4188,11 +4188,18 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
                 raw_risk = min(0.95, raw_risk + patient.imaging_risk_modifier)
                 model_type += " + Imaging"
         
-        # Patient data for sanity checks
+        # Patient data for sanity checks (includes sex and smoking for proper constraints)
         patient_check_data = {
-            'age': patient.age, 'bp_systolic': patient.bp_systolic,
-            'bp_diastolic': patient.bp_diastolic, 'hba1c': patient.hba1c or 5.5,
-            'bmi': patient.bmi, 'hdl': patient.hdl or 50
+            'age': patient.age, 
+            'sex': patient.sex,  # 0=female, 1=male - CRITICAL for sex-specific diseases
+            'bp_systolic': patient.bp_systolic,
+            'bp_diastolic': patient.bp_diastolic, 
+            'hba1c': patient.hba1c or 5.5,
+            'bmi': patient.bmi, 
+            'hdl': patient.hdl or 50,
+            'smoking': 1 if smoking_val > 0 else 0,  # CRITICAL for COPD
+            'smoking_pack_years': smoking_val,
+            'egfr': patient.egfr or 90  # For CKD checks
         }
         
         # CALIBRATION WITH AGE ADJUSTMENT + SANITY CHECKS
