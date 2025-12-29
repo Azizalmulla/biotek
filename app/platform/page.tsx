@@ -218,6 +218,14 @@ export default function PlatformPage() {
     const storedConsent = localStorage.getItem('biotek_consent');
     if (storedConsent) {
       setConsent(JSON.parse(storedConsent));
+    } else {
+      // Auto-consent for staff members (doctors, nurses, researchers, admins)
+      // They don't need patient-style consent to use the platform
+      if (['doctor', 'nurse', 'researcher', 'admin', 'receptionist'].includes(sessionData.role)) {
+        const staffConsent = { role: sessionData.role, autoConsent: true, timestamp: new Date().toISOString() };
+        localStorage.setItem('biotek_consent', JSON.stringify(staffConsent));
+        setConsent(staffConsent);
+      }
     }
 
     // Load model info and audit logs
