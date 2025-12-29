@@ -103,18 +103,22 @@ export default function Home() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-6 pt-8">
+            <div className="grid grid-cols-4 gap-6 pt-8">
               <div className="space-y-1">
-                <div className="text-3xl font-bold text-black">ε=3.0</div>
-                <div className="text-sm text-black/50">Privacy Budget</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-3xl font-bold text-black">78%</div>
+                <div className="text-3xl font-bold text-black">83%</div>
                 <div className="text-sm text-black/50">Model Accuracy</div>
               </div>
               <div className="space-y-1">
-                <div className="text-3xl font-bold text-black">SHAP</div>
-                <div className="text-sm text-black/50">Explainability</div>
+                <div className="text-3xl font-bold text-black">12</div>
+                <div className="text-sm text-black/50">Disease Models</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-3xl font-bold text-black">Evo 2</div>
+                <div className="text-sm text-black/50">DNA Analysis</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-3xl font-bold text-black">GLM-4</div>
+                <div className="text-sm text-black/50">Vision AI</div>
               </div>
             </div>
           </motion.div>
@@ -454,33 +458,33 @@ export default function Home() {
 const features = [
   {
     icon: '🧬',
-    title: 'Genomic Risk Prediction',
-    description: 'RandomForest-powered disease risk assessment using polygenic risk scores and clinical data.',
+    title: 'Evo 2 DNA Foundation Model',
+    description: 'NVIDIA NIM-powered 40B parameter model for DNA sequence analysis, variant effect prediction, and gene design.',
+  },
+  {
+    icon: '🔬',
+    title: 'GLM-4.5V Medical Vision',
+    description: 'Advanced vision-language model for medical imaging analysis, X-ray/CT/MRI interpretation, and clinical document OCR.',
+  },
+  {
+    icon: '🎯',
+    title: 'Multi-Disease Risk Prediction',
+    description: 'XGBoost+LightGBM ensemble predicting 12 chronic diseases with 83% accuracy and calibrated confidence intervals.',
+  },
+  {
+    icon: '🤖',
+    title: 'AI Clinical Assistant',
+    description: 'Conversational AI for clinical insights, evidence-based treatment protocols, and patient-specific recommendations.',
   },
   {
     icon: '🔒',
     title: 'Federated Learning',
-    description: 'Train models across distributed hospital nodes without centralizing patient data.',
-  },
-  {
-    icon: '🎯',
-    title: 'SHAP Explainability',
-    description: 'Understand which features drive predictions with transparent, interpretable AI explanations.',
-  },
-  {
-    icon: '🛡️',
-    title: 'Differential Privacy',
-    description: 'Add calibrated noise to protect individual privacy while maintaining utility.',
+    description: 'Train models across distributed hospital nodes without centralizing patient data. Full differential privacy.',
   },
   {
     icon: '📊',
-    title: 'Audit Trail',
-    description: 'Complete logging of consent decisions, model versions, and privacy parameters.',
-  },
-  {
-    icon: '⚡',
-    title: 'Real-Time Analysis',
-    description: 'Instant predictions with what-if scenario testing for clinical decision support.',
+    title: 'SHAP Explainability',
+    description: 'Understand which features drive predictions with transparent, interpretable AI explanations and audit trails.',
   },
 ];
 
@@ -504,8 +508,8 @@ const privacyFeatures = [
 ];
 
 const technologies = [
-  { icon: '⚡', name: 'RandomForest' },
-  { icon: '🔍', name: 'SHAP' },
-  { icon: '🔐', name: 'Diff Privacy' },
-  { icon: '🌐', name: 'Federation' },
+  { icon: '🧬', name: 'Evo 2 (40B)' },
+  { icon: '👁️', name: 'GLM-4.5V' },
+  { icon: '⚡', name: 'XGBoost' },
+  { icon: '🔍', name: 'LightGBM' },
 ];

@@ -14,42 +14,42 @@ interface Card {
 const cards: Card[] = [
   {
     id: 1,
-    title: 'Privacy-First Architecture',
-    description: 'Advanced privacy-preserving AI that keeps patient data secure through federated learning and differential privacy',
+    title: 'Evo 2 DNA Foundation Model',
+    description: 'NVIDIA NIM-powered 40B parameter biological foundation model for comprehensive DNA analysis',
     features: [
-      'Federated learning across distributed hospital nodes',
-      'Differential privacy with ε=3.0 mathematical guarantees',
-      'End-to-end encryption for all data transmission',
-      'Research-grade governance and full auditability'
+      'DNA sequence analysis with single-nucleotide sensitivity',
+      'Variant effect prediction and pathogenicity scoring',
+      'Gene and protein sequence design capabilities',
+      'Support for all domains of life (human, mouse, E.coli, yeast)'
     ],
     image: '/images/privacy-card.png',
-    bgColor: '#E8DDD0' // Warm beige like Anthropic
+    bgColor: '#E8DDD0'
   },
   {
     id: 2,
-    title: 'Genomic Intelligence',
-    description: 'Cutting-edge AI to quantify genetic and clinical risk factors with machine learning precision',
+    title: 'Multi-Disease Risk Prediction',
+    description: 'XGBoost + LightGBM ensemble predicting 12 chronic diseases with clinical-grade accuracy',
     features: [
-      'RandomForest ensemble with 78% prediction accuracy',
-      'Polygenic risk score integration from 100+ genetic variants',
-      'What-if scenario testing for intervention planning',
-      'Real-time risk assessment with sub-second latency'
+      '83% prediction accuracy with 0.890 AUC score',
+      '12 disease models: diabetes, heart disease, stroke, cancer & more',
+      'AI Treatment Optimizer with evidence-based protocols',
+      'Calibrated confidence intervals and risk trajectories'
     ],
     image: '/images/genomic-card.png',
-    bgColor: '#D5E0DD' // Muted sage/gray-green
+    bgColor: '#D5E0DD'
   },
   {
     id: 3,
-    title: 'AI Explainability',
-    description: 'Understand every prediction with research-grade explainability and natural language generation',
+    title: 'GLM-4.5V Medical Vision AI',
+    description: 'Advanced vision-language model for medical imaging and clinical document analysis',
     features: [
-      'SHAP values for individual feature contributions',
-      'Clinical knowledge retrieval for contextual explanations',
-      'Local language model for structured clinical reports',
-      'Calibrated confidence intervals for uncertainty'
+      'X-ray, CT, MRI, and pathology image interpretation',
+      'Clinical document OCR and structured data extraction',
+      'Deep reasoning mode for complex diagnostic cases',
+      'AI Research Assistant for patient-specific insights'
     ],
     image: '/images/ChatGPT Image Nov 10, 2025, 08_09_36 AM.png',
-    bgColor: '#DDD9E3' // Muted lavender/gray
+    bgColor: '#DDD9E3'
   }
 ];
 
