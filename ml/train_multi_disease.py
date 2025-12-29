@@ -475,16 +475,27 @@ class MultiDiseasePredictor:
         
         return results
     
-    def _categorize_risk(self, score: float) -> str:
-        """Categorize risk score"""
-        if score >= 0.7:
-            return "HIGH"
-        elif score >= 0.4:
-            return "MODERATE"
-        elif score >= 0.2:
-            return "LOW"
-        else:
-            return "MINIMAL"
+    def _categorize_risk(self, score: float, age: float = 50) -> str:
+        """Categorize risk score using SCORE 2 thresholds"""
+        # Age-stratified thresholds (middle age group as default)
+        if age < 50:  # Young - stricter thresholds
+            if score >= 0.10: return "VERY_HIGH"
+            elif score >= 0.075: return "HIGH"
+            elif score >= 0.05: return "MODERATE"
+            elif score >= 0.025: return "LOW"
+            else: return "MINIMAL"
+        elif age < 70:  # Middle age
+            if score >= 0.20: return "VERY_HIGH"
+            elif score >= 0.10: return "HIGH"
+            elif score >= 0.05: return "MODERATE"
+            elif score >= 0.025: return "LOW"
+            else: return "MINIMAL"
+        else:  # Elderly - higher thresholds
+            if score >= 0.30: return "VERY_HIGH"
+            elif score >= 0.15: return "HIGH"
+            elif score >= 0.075: return "MODERATE"
+            elif score >= 0.05: return "LOW"
+            else: return "MINIMAL"
     
     def _get_top_factors(self, model: DiseaseModel, X: pd.DataFrame) -> List[Dict]:
         """Get top contributing factors for prediction"""

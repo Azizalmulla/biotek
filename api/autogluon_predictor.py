@@ -245,17 +245,10 @@ class AutoGluonPredictor:
             
             risk_pct = risk_score * 100
             
-            # Determine risk category
-            if risk_pct >= 50:
-                category = "VERY_HIGH"
-            elif risk_pct >= 30:
-                category = "HIGH"
-            elif risk_pct >= 15:
-                category = "MODERATE"
-            elif risk_pct >= 5:
-                category = "LOW"
-            else:
-                category = "MINIMAL"
+            # Use SCORE 2 age-stratified thresholds (consistent with main API)
+            from clinical_utils import get_risk_category_score2
+            age = patient_data.get('age', 50)
+            category = get_risk_category_score2(risk_score, age, disease_id).value
             
             return {
                 'disease_id': disease_id,

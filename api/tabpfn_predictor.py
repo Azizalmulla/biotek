@@ -250,15 +250,10 @@ class TabPFNPredictor:
         risk_prob = proba[1] if len(proba) > 1 else proba[0]
         risk_percentage = risk_prob * 100
         
-        # Determine category
-        if risk_percentage >= 20:
-            category = "HIGH"
-        elif risk_percentage >= 10:
-            category = "MODERATE"
-        elif risk_percentage >= 5:
-            category = "LOW"
-        else:
-            category = "MINIMAL"
+        # Use SCORE 2 age-stratified thresholds (consistent with main API)
+        from clinical_utils import get_risk_category_score2
+        age = patient_data.get('age', 50) if isinstance(patient_data, dict) else 50
+        category = get_risk_category_score2(risk_prob, age, disease_id).value
         
         # Confidence based on context size
         context_size = len(X_context)
@@ -411,15 +406,12 @@ def predict_with_tabpfn_fast(patient_data: Dict[str, float]) -> Dict:
     for disease_id, config in DISEASE_CONFIGS.items():
         modifier = disease_modifiers.get(disease_id, 0.5)
         risk_pct = min(95, base_risk * modifier * 100)
+        risk_score = risk_pct / 100
         
-        if risk_pct >= 20:
-            category = "HIGH"
-        elif risk_pct >= 10:
-            category = "MODERATE"
-        elif risk_pct >= 5:
-            category = "LOW"
-        else:
-            category = "MINIMAL"
+        # Use SCORE 2 age-stratified thresholds
+        from clinical_utils import get_risk_category_score2
+        age = patient_data.get('age', 50)
+        category = get_risk_category_score2(risk_score, age, disease_id).value
         
         results[disease_id] = {
             'disease_id': disease_id,
