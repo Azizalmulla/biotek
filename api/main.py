@@ -378,6 +378,7 @@ async def load_model():
         'colorectal_cancer': 'real_colorectal_cancer_model.pkl',
     }
     
+    load_errors = []
     for disease_id, filename in disease_model_files.items():
         model_path = REAL_MODELS_DIR / filename
         try:
@@ -389,7 +390,14 @@ async def load_model():
             else:
                 print(f"  ⚠ {disease_id}: not found at {model_path}")
         except Exception as e:
-            print(f"  ✗ {disease_id}: load error - {e}")
+            import traceback
+            err_msg = f"{disease_id}: {type(e).__name__} - {str(e)[:100]}"
+            load_errors.append(err_msg)
+            print(f"  ✗ {err_msg}")
+            traceback.print_exc()
+    
+    if load_errors:
+        print(f"  Load errors: {load_errors}")
     
     # Load real models metadata
     try:
@@ -3600,13 +3608,25 @@ async def get_sample_genotypes(risk_level: str = "average"):
 async def debug_paths():
     """Debug endpoint to check model paths on Railway"""
     import os
+    
+    # Try to load one model directly to see the error
+    test_load_error = None
+    try:
+        test_path = REAL_MODELS_DIR / "real_type2_diabetes_model.pkl"
+        if test_path.exists():
+            with open(test_path, 'rb') as f:
+                test_model = pickle.load(f)
+            test_load_error = f"Success! Loaded {type(test_model)}"
+    except Exception as e:
+        import traceback
+        test_load_error = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+    
     return {
         "cwd": os.getcwd(),
-        "api_dir": str(API_DIR) if 'API_DIR' in dir() else str(_API_ROOT),
         "real_models_dir": str(REAL_MODELS_DIR),
         "models_dir_exists": REAL_MODELS_DIR.exists() if REAL_MODELS_DIR else False,
-        "models_found": list(REAL_MODELS_DIR.glob("real_*.pkl")) if REAL_MODELS_DIR and REAL_MODELS_DIR.exists() else [],
         "loaded_models": list(real_disease_models.keys()),
+        "test_load_result": test_load_error,
         "dir_contents": os.listdir(REAL_MODELS_DIR) if REAL_MODELS_DIR and REAL_MODELS_DIR.exists() else []
     }
 
