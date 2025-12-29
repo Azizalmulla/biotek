@@ -323,79 +323,102 @@ export default function PlatformPage() {
     setAiQuestion('');
     setAiLoading(true);
     
-    try {
-      // Build multi-disease context for AI
-      const topRisks = multiDiseaseData?.predictions 
-        ? Object.values(multiDiseaseData.predictions)
-            .sort((a: any, b: any) => b.risk_score - a.risk_score)
-            .slice(0, 5)
-            .map((d: any) => ({
-              name: d.name,
-              risk: d.risk_percentage,
-              category: d.risk_category,
-              factors: d.top_factors?.slice(0, 2).map((f: any) => f.feature) || []
-            }))
-        : [];
+    // Retry logic for cold start handling
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Build multi-disease context for AI
+        const topRisks = multiDiseaseData?.predictions 
+          ? Object.values(multiDiseaseData.predictions)
+              .sort((a: any, b: any) => b.risk_score - a.risk_score)
+              .slice(0, 5)
+              .map((d: any) => ({
+                name: d.name,
+                risk: d.risk_percentage,
+                category: d.risk_category,
+                factors: d.top_factors?.slice(0, 2).map((f: any) => f.feature) || []
+              }))
+          : [];
 
-      // Get full clinical data from multiDiseaseData
-      const clinicalData = multiDiseaseData?.input_data || multiDiseaseData?.clinical_data || {};
-      
-      const response = await fetch(`${API_BASE}/ai/ask`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: userMessage,
-          conversation_history: aiMessages,
-          prediction_data: {
-            risk_percentage: prediction.risk_percentage,
-            risk_category: prediction.risk_category,
-            top_factors: Object.keys(prediction.feature_importance || {}).slice(0, 3),
-            // Include ALL clinical data
-            clinical_values: {
-              age: clinicalData.age || prediction.feature_importance?.age,
-              bmi: clinicalData.bmi || prediction.feature_importance?.bmi,
-              bp_systolic: clinicalData.bp_systolic,
-              bp_diastolic: clinicalData.bp_diastolic,
-              total_cholesterol: clinicalData.total_cholesterol,
-              hdl: clinicalData.hdl,
-              ldl: clinicalData.ldl || prediction.feature_importance?.ldl,
-              triglycerides: clinicalData.triglycerides,
-              hba1c: clinicalData.hba1c || prediction.feature_importance?.hba1c,
-              egfr: clinicalData.egfr,
-              smoking_pack_years: clinicalData.smoking_pack_years,
-              exercise_hours_weekly: clinicalData.exercise_hours_weekly,
-              has_diabetes: clinicalData.has_diabetes,
-              on_bp_medication: clinicalData.on_bp_medication,
-              family_history_score: clinicalData.family_history_score,
-              sex: clinicalData.sex
-            },
-            // Multi-disease context
-            multi_disease_analysis: {
-              total_diseases: 12,
-              high_risk_count: multiDiseaseData?.summary?.high_risk_count || 0,
-              top_risks: topRisks
+        // Get full clinical data from multiDiseaseData
+        const clinicalData = multiDiseaseData?.input_data || multiDiseaseData?.clinical_data || {};
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+        
+        const response = await fetch(`${API_BASE}/ai/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: userMessage,
+            conversation_history: aiMessages,
+            prediction_data: {
+              risk_percentage: prediction.risk_percentage,
+              risk_category: prediction.risk_category,
+              top_factors: Object.keys(prediction.feature_importance || {}).slice(0, 3),
+              // Include ALL clinical data
+              clinical_values: {
+                age: clinicalData.age || prediction.feature_importance?.age,
+                bmi: clinicalData.bmi || prediction.feature_importance?.bmi,
+                bp_systolic: clinicalData.bp_systolic,
+                bp_diastolic: clinicalData.bp_diastolic,
+                total_cholesterol: clinicalData.total_cholesterol,
+                hdl: clinicalData.hdl,
+                ldl: clinicalData.ldl || prediction.feature_importance?.ldl,
+                triglycerides: clinicalData.triglycerides,
+                hba1c: clinicalData.hba1c || prediction.feature_importance?.hba1c,
+                egfr: clinicalData.egfr,
+                smoking_pack_years: clinicalData.smoking_pack_years,
+                exercise_hours_weekly: clinicalData.exercise_hours_weekly,
+                has_diabetes: clinicalData.has_diabetes,
+                on_bp_medication: clinicalData.on_bp_medication,
+                family_history_score: clinicalData.family_history_score,
+                sex: clinicalData.sex
+              },
+              // Multi-disease context
+              multi_disease_analysis: {
+                total_diseases: 12,
+                high_risk_count: multiDiseaseData?.summary?.high_risk_count || 0,
+                top_risks: topRisks
+              }
             }
-          }
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+          }),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Add AI response with timestamp
+        setAiMessages(prev => [...prev, { role: 'assistant', content: data.answer, timestamp: new Date().toISOString() }]);
+        setAiLoading(false);
+        return; // Success - exit retry loop
+        
+      } catch (error: any) {
+        lastError = error;
+        console.warn(`AI request attempt ${attempt}/${maxRetries} failed:`, error.message);
+        
+        if (attempt < maxRetries) {
+          // Wait before retry (exponential backoff: 1s, 2s, 4s)
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt - 1) * 1000));
+        }
       }
-      
-      const data = await response.json();
-      
-      // Add AI response with timestamp
-      setAiMessages(prev => [...prev, { role: 'assistant', content: data.answer, timestamp: new Date().toISOString() }]);
-    } catch (error: any) {
-      console.error('AI question failed:', error);
-      setAiMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: `⚠️ Error: ${error.message || 'Failed to get AI response. Please try again.'}` 
-      }]);
-    } finally {
-      setAiLoading(false);
     }
+    
+    // All retries failed
+    console.error('AI question failed after all retries:', lastError);
+    setAiMessages(prev => [...prev, { 
+      role: 'assistant', 
+      content: `⚠️ Connection issue. The server may be waking up - please try again in a moment.` 
+    }]);
+    setAiLoading(false);
   };
 
   // Fetch multi-disease predictions
