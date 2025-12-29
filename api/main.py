@@ -3632,28 +3632,20 @@ async def get_sample_genotypes(risk_level: str = "average"):
 
 @app.get("/debug/paths")
 async def debug_paths():
-    """Debug endpoint to check model paths on Railway"""
+    """Debug endpoint to check model paths and feature names"""
     import os
     
-    # Try to load one model directly to see the error
-    test_load_error = None
-    try:
-        test_path = REAL_MODELS_DIR / "real_type2_diabetes_model.pkl"
-        if test_path.exists():
-            with open(test_path, 'rb') as f:
-                test_model = pickle.load(f)
-            test_load_error = f"Success! Loaded {type(test_model)}"
-    except Exception as e:
-        import traceback
-        test_load_error = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+    # Get feature names for each model
+    model_features = {}
+    for disease_id, model in real_disease_models.items():
+        if hasattr(model, 'feature_names'):
+            model_features[disease_id] = model.feature_names
     
     return {
         "cwd": os.getcwd(),
         "real_models_dir": str(REAL_MODELS_DIR),
-        "models_dir_exists": REAL_MODELS_DIR.exists() if REAL_MODELS_DIR else False,
         "loaded_models": list(real_disease_models.keys()),
-        "test_load_result": test_load_error,
-        "dir_contents": os.listdir(REAL_MODELS_DIR) if REAL_MODELS_DIR and REAL_MODELS_DIR.exists() else []
+        "model_features": model_features
     }
 
 @app.get("/model/info")
