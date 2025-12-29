@@ -152,13 +152,13 @@ app.add_middleware(
 if CLOUD_MODELS_AVAILABLE:
     app.include_router(cloud_router)
 
-# Load model and metadata on startup - use paths relative to project root
-_PROJECT_ROOT = Path(__file__).parent.parent
-MODEL_PATH = _PROJECT_ROOT / "models/lightgbm_model.pkl"
-FEATURES_PATH = _PROJECT_ROOT / "models/feature_names.pkl"
-METADATA_PATH = _PROJECT_ROOT / "models/model_metadata.pkl"
-DB_PATH = _PROJECT_ROOT / "data/audit_log.db"
-KNOWLEDGE_PATH = _PROJECT_ROOT / "data/medical_knowledge.json"
+# Load model and metadata on startup - use api/ directory paths
+_API_ROOT = Path(__file__).parent.resolve()
+MODEL_PATH = _API_ROOT / "models/lightgbm_model.pkl"
+FEATURES_PATH = _API_ROOT / "models/feature_names.pkl"
+METADATA_PATH = _API_ROOT / "models/model_metadata.pkl"
+DB_PATH = _API_ROOT / "data/audit_log.db"
+KNOWLEDGE_PATH = _API_ROOT / "data/medical_knowledge.json"
 
 model = None
 feature_names = None
@@ -176,21 +176,9 @@ LLM_MODEL = "GLM-4.5V"
 LLM_PROVIDER = "OpenRouter"
 
 # Real trained disease models (XGBoost + LightGBM)
-# Try multiple possible paths for Railway compatibility
+# Use api/models directory (where models are deployed for Railway)
 API_DIR = Path(__file__).parent.resolve()
-_possible_model_dirs = [
-    API_DIR.parent / "models",  # When running from api/
-    API_DIR / "models",         # If models are in api/models/
-    Path("models"),             # Relative to cwd
-    Path("/app/models"),        # Railway typical path
-]
-REAL_MODELS_DIR = None
-for _dir in _possible_model_dirs:
-    if _dir.exists() and (_dir / "real_type2_diabetes_model.pkl").exists():
-        REAL_MODELS_DIR = _dir
-        break
-if REAL_MODELS_DIR is None:
-    REAL_MODELS_DIR = API_DIR.parent / "models"  # Default fallback
+REAL_MODELS_DIR = API_DIR / "models"  # api/models/
 real_disease_models = {}
 real_models_metadata = None
 
