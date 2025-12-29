@@ -5,20 +5,29 @@ Privacy-preserving disease risk prediction API
 
 # Fix pickle module reference for Railway deployment
 # Models were pickled with references to ml.train_real_data.RealDiseaseModel
-# We need to make that class available under the expected module path
+# and ml.disease_model.RealDiseaseModel - we need both aliases
 import sys
 from types import ModuleType
 
+# Import the actual class first
+from disease_model import RealDiseaseModel
+
 # Create fake 'ml' module hierarchy for pickle compatibility
 ml_module = ModuleType('ml')
+ml_module.__path__ = []  # Make it a package
 ml_train_real_data = ModuleType('ml.train_real_data')
+ml_disease_model = ModuleType('ml.disease_model')
+
+# Register all possible module paths that pickle might reference
 sys.modules['ml'] = ml_module
 sys.modules['ml.train_real_data'] = ml_train_real_data
+sys.modules['ml.disease_model'] = ml_disease_model
 
-# Import the actual class and make it available under the expected name
-from disease_model import RealDiseaseModel
+# Make RealDiseaseModel available under all expected paths
 ml_train_real_data.RealDiseaseModel = RealDiseaseModel
+ml_disease_model.RealDiseaseModel = RealDiseaseModel
 ml_module.train_real_data = ml_train_real_data
+ml_module.disease_model = ml_disease_model
 
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
