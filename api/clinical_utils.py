@@ -761,28 +761,32 @@ def apply_sanity_checks(risk: float, disease_id: str, data: dict) -> float:
                 return min(risk, 0.05)  # Elderly non-smokers: slightly higher due to age
         else:
             # Smokers: risk scales with pack-years
-            if smoking_pack_years < 10:
-                return min(risk, 0.10)  # Light smoking
-            elif smoking_pack_years < 20:
-                return min(risk, 0.20)  # Moderate smoking
-            # Heavy smokers (20+ pack-years) can have higher risk
+            if smoking_pack_years <= 10:
+                return min(risk, 0.10)  # Light smoking (≤10 pack-years)
+            elif smoking_pack_years <= 20:
+                return min(risk, 0.20)  # Moderate smoking (11-20 pack-years)
+            elif smoking_pack_years <= 30:
+                return min(risk, 0.35)  # Heavy smoking (21-30 pack-years)
+            else:
+                return min(risk, 0.50)  # Very heavy (30+ pack-years) max 50%
     
     # ==========================================================================
     # CARDIOVASCULAR SANITY CHECKS
     # ==========================================================================
     
-    # HYPERTENSION: Based on actual BP readings (this predicts FUTURE hypertension)
-    # Note: If patient already HAS high BP, they already have hypertension
+    # HYPERTENSION: Based on actual BP readings
+    # NOTE: BP ≥140/90 IS DIAGNOSTIC - patient already HAS hypertension
     if disease_id == 'hypertension':
-        if bp_sys < 120 and bp_dia < 80:
+        if bp_sys >= 180 or bp_dia >= 120:
+            return 0.99  # HYPERTENSIVE CRISIS: Patient has severe hypertension
+        elif bp_sys >= 140 or bp_dia >= 90:
+            return 0.95  # DIAGNOSTIC: Patient already has hypertension
+        elif bp_sys < 120 and bp_dia < 80:
             return min(risk, 0.05)  # Normal BP: max 5% future risk
-        elif bp_sys < 130 and bp_dia < 85:
+        elif bp_sys <= 130 and bp_dia <= 85:
             return min(risk, 0.10)  # Elevated: max 10%
-        elif bp_sys < 140 and bp_dia < 90:
-            return min(risk, 0.18)  # Stage 1: max 18%
-        elif bp_sys < 160 and bp_dia < 100:
-            return min(risk, 0.35)  # Stage 2: higher risk
-        # Stage 2+ (>=160/100): can have high risk
+        else:  # 130-139 / 85-89
+            return min(risk, 0.18)  # Pre-hypertension: max 18%
     
     # CORONARY HEART DISEASE: Multiple factor constraints
     if disease_id == 'coronary_heart_disease':
@@ -820,7 +824,14 @@ def apply_sanity_checks(risk: float, disease_id: str, data: dict) -> float:
             if bp_sys < 140:
                 return min(risk, 0.10)
             return min(risk, 0.20)
-        # 75+: higher risk acceptable
+        else:  # 75+
+            if bp_sys < 130 and not is_smoker:
+                return min(risk, 0.08)  # Healthy elderly
+            elif bp_sys < 140:
+                return min(risk, 0.12)  # Normal-ish BP
+            elif bp_sys < 160:
+                return min(risk, 0.20)  # Elevated
+            return min(risk, 0.30)  # High BP elderly max 30%
         if hdl >= 60:
             risk = risk * 0.75  # 25% reduction for high HDL
     
@@ -843,23 +854,29 @@ def apply_sanity_checks(risk: float, disease_id: str, data: dict) -> float:
     # ==========================================================================
     
     # TYPE 2 DIABETES: HbA1c is the definitive marker
+    # NOTE: HbA1c ≥6.5 IS DIAGNOSTIC - patient already HAS diabetes
     if disease_id == 'type2_diabetes':
-        if hba1c < 5.7:
+        if hba1c >= 6.5:
+            return 0.95  # DIAGNOSTIC: Patient already has diabetes
+        elif hba1c < 5.7:
             return min(risk, 0.08)  # Normal HbA1c: max 8%
         elif hba1c < 6.0:
             return min(risk, 0.15)  # Prediabetes zone: max 15%
-        elif hba1c < 6.5:
+        else:  # 6.0-6.4
             return min(risk, 0.30)  # High prediabetes: max 30%
-        # HbA1c >= 6.5 is diagnostic, risk can be higher
     
     # CHRONIC KIDNEY DISEASE: eGFR is key marker
+    # NOTE: eGFR <60 IS DIAGNOSTIC - patient already HAS CKD
     if disease_id == 'chronic_kidney_disease':
         egfr = data.get('egfr', 90)
-        if egfr >= 90:
+        if egfr < 30:
+            return 0.99  # Stage 4-5 CKD: severe
+        elif egfr < 60:
+            return 0.95  # DIAGNOSTIC: Stage 3 CKD - patient has CKD
+        elif egfr >= 90:
             return min(risk, 0.05)  # Normal kidney function
-        elif egfr >= 60:
-            return min(risk, 0.15)  # Mildly reduced
-        # eGFR < 60 indicates actual CKD
+        else:  # 60-89
+            return min(risk, 0.15)  # Mildly reduced (Stage 2)
     
     # NAFLD: BMI and metabolic factors
     if disease_id == 'nafld':
