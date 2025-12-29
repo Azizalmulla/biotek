@@ -4318,13 +4318,15 @@ def log_prediction(patient_id: str, input_data: str, prediction: float,
              used_genetics, consent_id, model_version)
             VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
         """
+        # PostgreSQL needs actual boolean, SQLite uses 1/0
+        genetics_value = used_genetics if USE_POSTGRES else (1 if used_genetics else 0)
         execute_query(query, (
             datetime.now().isoformat(),
             patient_id,
             input_data,
             prediction,
             risk_category,
-            1 if used_genetics else 0,
+            genetics_value,
             consent_id,
             model_version
         ))
