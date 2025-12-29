@@ -1145,6 +1145,8 @@ def log_access_attempt(
         (timestamp, user_id, user_role, purpose, data_type, patient_id, granted, reason, ip_address)
         VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
     """
+    # PostgreSQL needs actual boolean, SQLite uses 1/0
+    granted_value = granted if USE_POSTGRES else (1 if granted else 0)
     execute_query(query, (
         datetime.now().isoformat(),
         user_id,
@@ -1152,7 +1154,7 @@ def log_access_attempt(
         purpose,
         data_type,
         patient_id,
-        1 if granted else 0,
+        granted_value,
         reason,
         ip_address
     ))
