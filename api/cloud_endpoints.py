@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Load .env file before importing cloud models
 load_dotenv()
 
-from api.cloud_models import BioTekCloudClient, CloudModelConfig
+from cloud_models import BioTekCloudClient, CloudModelConfig
 
 # Initialize router
 router = APIRouter(prefix="/cloud", tags=["Cloud Models"])

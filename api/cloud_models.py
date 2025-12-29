@@ -296,7 +296,7 @@ class GLM45VClient:
     def __init__(self, config: CloudModelConfig):
         self.api_key = config.openrouter_api_key
         self.base_url = config.openrouter_base_url
-        self.model = "openai/gpt-4o-mini"  # Reliable model for clinical AI
+        self.model = "z-ai/glm-4.5v"
         
     def _make_request(self, messages: List[Dict], reasoning: bool = False) -> Dict:
         """Make request to OpenRouter API"""
