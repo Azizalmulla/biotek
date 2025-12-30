@@ -4075,9 +4075,15 @@ def process_patient_data(patient: MultiDiseaseInput) -> dict:
 
 
 @app.post("/predict/multi-disease")
-async def predict_multi_disease(patient: MultiDiseaseInput):
+async def predict_multi_disease(
+    patient: MultiDiseaseInput,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
     """
     Hospital-Grade Multi-Disease Risk Prediction
+    
+    RBAC: Only doctors can run predictions. Nurses/patients read-only via /patient/{id}/prediction-results
     
     Features:
     - SCORE 2 age-stratified risk thresholds (European Guidelines 2021)
@@ -4093,6 +4099,13 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
     - Gail Model (breast cancer)
     - CAIDE (Alzheimer's)
     """
+    # SERVER-SIDE RBAC: Only doctors can run predictions
+    allowed_roles = ['doctor']
+    if user_role.lower() not in allowed_roles:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Role '{user_role}' cannot run predictions. Only doctors can create risk assessments."
+        )
     from clinical_calculators import PatientData, calculate_all_risks
     from clinical_utils import validate_inputs
     
@@ -5508,9 +5521,15 @@ The interconnection between elevated blood pressure, dyslipidemia, and insulin r
 
 
 @app.post("/ai/analyze-variant")
-async def analyze_variant(request: dict):
+async def analyze_variant(
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
     """
     Clinical Genetic Variant Pathogenicity Analyzer
+    
+    RBAC: Only doctors can access genetic analysis.
     
     Accepts:
     - HGVS notation (e.g., "BRCA1 c.5266dupC")
@@ -5527,6 +5546,13 @@ async def analyze_variant(request: dict):
     NOTE: This is DECISION SUPPORT only. Results do NOT modify disease risk scores.
     Genetics appear as secondary signals for clinician context.
     """
+    # SERVER-SIDE RBAC: Only doctors can access genetic analysis
+    allowed_roles = ['doctor']
+    if user_role.lower() not in allowed_roles:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Role '{user_role}' cannot access genetic analysis. Only doctors can interpret genetic data."
+        )
     try:
         variant = request.get('variant', '')
         gene = request.get('gene', '')

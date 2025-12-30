@@ -710,14 +710,14 @@ export default function PlatformPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex gap-8">
             {[
-              { id: 'predict', label: 'Risk Prediction', icon: '🎯' },
-              { id: 'dna-analysis', label: 'Genetic Variants', icon: '🧬' },
-              { id: 'medical-imaging', label: 'Medical Imaging', icon: '👁️' },
-              { id: 'ai-insights', label: 'AI Clinical Intelligence', icon: '🧠' },
-              { id: 'federated', label: 'Federated Network', icon: '🔗' },
-              { id: 'data-exchange', label: 'Data Exchange', icon: '🏥' },
-              { id: 'audit', label: 'Audit Trail', icon: '📋' },
-            ].map((tab) => (
+              { id: 'predict', label: 'Risk Prediction', icon: '🎯', roles: ['doctor'] },
+              { id: 'dna-analysis', label: 'Genetic Variants', icon: '🧬', roles: ['doctor'] },
+              { id: 'medical-imaging', label: 'Medical Imaging', icon: '👁️', roles: ['doctor'] },
+              { id: 'ai-insights', label: 'AI Clinical Intelligence', icon: '🧠', roles: ['doctor'] },
+              { id: 'federated', label: 'Federated Network', icon: '🔗', roles: ['doctor', 'admin'] },
+              { id: 'data-exchange', label: 'Data Exchange', icon: '🏥', roles: ['doctor', 'admin'] },
+              { id: 'audit', label: 'Audit Trail', icon: '📋', roles: ['doctor', 'nurse', 'admin'] },
+            ].filter(tab => !session?.role || tab.roles.includes(session.role)).map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
