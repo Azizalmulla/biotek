@@ -76,18 +76,36 @@ export default function VariantAnalyzer({ patientId, encounterId, userId, userRo
   const [result, setResult] = useState<VariantResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Save result to patient record
-  const saveToPatientRecord = async (variantData: VariantResult) => {
-    if (!patientId) return;
+  // Save result to ENCOUNTER (not legacy patient table)
+  const saveToEncounter = async (variantData: VariantResult) => {
+    if (!patientId || !encounterId) {
+      // Still call callback even if no encounter (for UI refresh)
+      onResultSaved?.(variantData);
+      return;
+    }
     try {
-      await fetch(`${API_BASE}/patient/${patientId}/variant-result`, {
+      await fetch(`${API_BASE}/encounters/${encounterId}/genetic`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(variantData)
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-User-ID': userId || 'unknown',
+          'X-User-Role': userRole || 'doctor'
+        },
+        body: JSON.stringify({
+          patient_id: patientId,
+          variant_input: variantData.variant,
+          gene: variantData.gene,
+          classification: variantData.classification,
+          confidence: variantData.confidence,
+          result: variantData,
+          visibility: 'clinician_only'
+        })
       });
+      console.log('[ENCOUNTER] Genetic result saved to encounter:', encounterId);
       onResultSaved?.(variantData);
     } catch (err) {
-      console.error('Failed to save variant result:', err);
+      console.error('Failed to save variant to encounter:', err);
+      onResultSaved?.(variantData);
     }
   };
 
@@ -123,9 +141,9 @@ export default function VariantAnalyzer({ patientId, encounterId, userId, userRo
 
       const data = await response.json();
       setResult(data);
-      // Auto-save to patient record if patient ID is provided
+      // Auto-save to encounter if patient ID is provided
       if (patientId) {
-        saveToPatientRecord(data);
+        saveToEncounter(data);
       }
     } catch (err: any) {
       console.error('Variant analysis failed:', err);

@@ -1031,14 +1031,14 @@ export default function PlatformPage() {
                 onPredictionComplete={(data) => {
                   setPrediction(data);
                   setMultiDiseaseData(data);
-                  // Save to patient record (legacy)
-                  if (currentPatientId) {
-                    savePatientPrediction(currentPatientId, data);
-                  }
-                  // Save to encounter (new - links to encounter_id)
-                  if (currentEncounterId && currentPatientId) {
-                    saveEncounterPrediction(currentEncounterId, currentPatientId, data);
-                  }
+                  // NOTE: Prediction now saved to encounter inside MultiDiseaseRisk
+                  // No legacy patient_prediction_results save needed
+                }}
+                onCreateEncounter={async () => {
+                  // Create encounter when analysis starts (encounter-first approach)
+                  if (!currentPatientId) return null;
+                  const encId = await createEncounter(currentPatientId);
+                  return encId;
                 }}
                 patientId={currentPatientId}
                 userId={session?.userId}
@@ -1284,11 +1284,7 @@ export default function PlatformPage() {
                               });
                               const data = await response.json();
                               setClinicalReasoning(data);
-                              // Auto-save to patient record (legacy)
-                              if (currentPatientId) {
-                                savePatientClinicalReasoning(currentPatientId, data);
-                              }
-                              // Save to encounter (new)
+                              // Save to ENCOUNTER ONLY (no legacy patient table)
                               if (currentEncounterId && currentPatientId) {
                                 saveEncounterAINote(currentEncounterId, currentPatientId, {
                                   note_type: 'clinical_reasoning',
@@ -1494,11 +1490,7 @@ export default function PlatformPage() {
                               const data = await response.json();
                               console.log('Treatment data:', data);
                               setTreatment(data);
-                              // Auto-save to patient record (legacy)
-                              if (currentPatientId) {
-                                savePatientTreatment(currentPatientId, data);
-                              }
-                              // Save to encounter (new)
+                              // Save to ENCOUNTER ONLY (no legacy patient table)
                               if (currentEncounterId && currentPatientId) {
                                 saveEncounterAINote(currentEncounterId, currentPatientId, {
                                   note_type: 'treatment_optimization',

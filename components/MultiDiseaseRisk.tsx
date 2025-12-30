@@ -91,6 +91,7 @@ const DISEASE_CATEGORIES = {
 
 interface MultiDiseaseRiskProps {
   onPredictionComplete?: (result: PredictionResult) => void;
+  onCreateEncounter?: () => Promise<string | null>;  // Returns encounter_id
   patientId?: string | null;
   userId?: string;
   userRole?: string;
@@ -117,11 +118,14 @@ const DEFAULT_FORM_DATA = {
 };
 
 export default function MultiDiseaseRisk({ 
-  onPredictionComplete, 
+  onPredictionComplete,
+  onCreateEncounter,
   patientId, 
   userId = 'unknown',
-  userRole = 'doctor'
+  userRole = 'doctor',
+  encounterId: initialEncounterId
 }: MultiDiseaseRiskProps = {}) {
+  const [currentEncounterId, setCurrentEncounterId] = useState<string | null>(initialEncounterId || null);
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
   
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -223,6 +227,16 @@ export default function MultiDiseaseRisk({
     setError(null);
 
     try {
+      // ENCOUNTER-FIRST: Create encounter before running analysis
+      let encounterId = currentEncounterId;
+      if (!encounterId && onCreateEncounter && patientId) {
+        console.log('[ENCOUNTER] Creating new encounter for patient:', patientId);
+        encounterId = await onCreateEncounter();
+        if (encounterId) {
+          setCurrentEncounterId(encounterId);
+          console.log('[ENCOUNTER] Created:', encounterId);
+        }
+      }
       let prsScore = 0;
       let imagingRiskModifier = 0;
 
@@ -312,20 +326,25 @@ export default function MultiDiseaseRisk({
       // Save patient data after successful prediction
       await savePatientData();
       
-      // Save prediction results for this patient
-      if (patientId) {
+      // Save prediction results to ENCOUNTER (not legacy patient table)
+      if (patientId && encounterId) {
         try {
-          await fetch(`${API_BASE}/patient/${patientId}/prediction-results`, {
+          await fetch(`${API_BASE}/encounters/${encounterId}/prediction`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
               'X-User-ID': userId || 'unknown',
-              'X-User-Role': userRole || 'unknown'
+              'X-User-Role': userRole || 'doctor'
             },
-            body: JSON.stringify(enhancedData),
+            body: JSON.stringify({
+              patient_id: patientId,
+              prediction: enhancedData,
+              visibility: 'patient_visible'
+            }),
           });
+          console.log('[ENCOUNTER] Prediction saved to encounter:', encounterId);
         } catch (e) {
-          console.log('Failed to save prediction results:', e);
+          console.log('Failed to save prediction to encounter:', e);
         }
       }
       
