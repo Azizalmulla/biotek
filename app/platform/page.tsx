@@ -15,6 +15,7 @@ import MedicalImagingUpload from '@/components/MedicalImagingUpload';
 import MultiDiseaseRisk from '@/components/MultiDiseaseRisk';
 import AdvancedMedicalImaging from '@/components/AdvancedMedicalImaging';
 import DataExchange from '@/components/DataExchange';
+import EncounterTimeline from '@/components/EncounterTimeline';
 
 const API_BASE = 'https://biotek-production.up.railway.app';
 
@@ -67,6 +68,7 @@ export default function PlatformPage() {
   // Encounter state - links all diagnostic outputs together
   const [currentEncounterId, setCurrentEncounterId] = useState<string | null>(null);
   const [encounterStatus, setEncounterStatus] = useState<'none' | 'in_progress' | 'completed'>('none');
+  const [showTimeline, setShowTimeline] = useState(false);
   
   // Patient-specific chat memory
   const [patientChatHistories, setPatientChatHistories] = useState<Record<string, Array<{role: 'user' | 'assistant', content: string, timestamp?: string}>>>({});
@@ -943,16 +945,36 @@ export default function PlatformPage() {
                 • All diagnostic outputs will be linked to this encounter
               </span>
             </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowTimeline(true)}
+                className="text-xs bg-white border border-green-300 text-green-700 px-3 py-1 rounded-full hover:bg-green-100"
+              >
+                📋 View Timeline
+              </button>
+              <button
+                onClick={() => {
+                  if (currentEncounterId) {
+                    completeEncounter(currentEncounterId);
+                    setCurrentEncounterId(null);
+                  }
+                }}
+                className="text-xs bg-green-600 text-white px-3 py-1 rounded-full hover:bg-green-700"
+              >
+                Complete Encounter
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* View Timeline for past encounters (when no active encounter) */}
+        {currentPatientId && !currentEncounterId && session?.role === 'doctor' && (
+          <div className="mb-4 flex justify-end">
             <button
-              onClick={() => {
-                if (currentEncounterId) {
-                  completeEncounter(currentEncounterId);
-                  setCurrentEncounterId(null);
-                }
-              }}
-              className="text-xs bg-green-600 text-white px-3 py-1 rounded-full hover:bg-green-700"
+              onClick={() => setShowTimeline(true)}
+              className="text-xs bg-stone-100 border border-stone-200 text-stone-700 px-3 py-1.5 rounded-full hover:bg-stone-200 flex items-center gap-1"
             >
-              Complete Encounter
+              📋 View Past Encounters
             </button>
           </div>
         )}
@@ -1895,6 +1917,35 @@ export default function PlatformPage() {
           </motion.div>
         </div>
       )}
+      
+      {/* Encounter Timeline Modal */}
+      <AnimatePresence>
+        {showTimeline && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowTimeline(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-3xl max-h-[80vh] overflow-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <EncounterTimeline
+                encounterId={currentEncounterId}
+                patientId={currentPatientId}
+                userId={session?.userId}
+                userRole={session?.role}
+                onClose={() => setShowTimeline(false)}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

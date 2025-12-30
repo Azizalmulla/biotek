@@ -71,6 +71,17 @@ export default function NurseDashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [newNote, setNewNote] = useState('');
+  const [showVitalsForm, setShowVitalsForm] = useState(false);
+  const [newVitals, setNewVitals] = useState({
+    bp_systolic: '',
+    bp_diastolic: '',
+    heart_rate: '',
+    temperature: '',
+    respiratory_rate: '',
+    oxygen_saturation: '',
+    weight: '',
+    pain_level: ''
+  });
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://biotek-production.up.railway.app';
 
@@ -283,6 +294,52 @@ export default function NurseDashboard() {
       });
     } catch (e) {
       console.error('Failed to save note:', e);
+    }
+  };
+
+  const submitVitals = async () => {
+    if (!selectedPatient) return;
+    
+    const vitalRecord: Vitals = {
+      timestamp: new Date().toISOString(),
+      bp_systolic: parseInt(newVitals.bp_systolic) || 0,
+      bp_diastolic: parseInt(newVitals.bp_diastolic) || 0,
+      heart_rate: parseInt(newVitals.heart_rate) || 0,
+      temperature: parseFloat(newVitals.temperature) || 0,
+      weight: parseFloat(newVitals.weight) || 0,
+      respiratory_rate: parseInt(newVitals.respiratory_rate) || 0,
+      oxygen_saturation: parseInt(newVitals.oxygen_saturation) || 0
+    };
+    
+    // Add to local state
+    setVitals(prev => [vitalRecord, ...prev]);
+    
+    // Reset form
+    setNewVitals({
+      bp_systolic: '',
+      bp_diastolic: '',
+      heart_rate: '',
+      temperature: '',
+      respiratory_rate: '',
+      oxygen_saturation: '',
+      weight: '',
+      pain_level: ''
+    });
+    setShowVitalsForm(false);
+    
+    // Try to save to backend
+    try {
+      await fetch(`${API_BASE}/nurse/patient/${selectedPatient.patient_id}/vitals`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': 'nurse',
+          'X-User-ID': session?.userId || 'nurse'
+        },
+        body: JSON.stringify(vitalRecord)
+      });
+    } catch (e) {
+      console.error('Failed to save vitals:', e);
     }
   };
 
@@ -555,34 +612,157 @@ export default function NurseDashboard() {
                   key="vitals"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-2xl p-6 shadow-sm border border-black/10"
+                  className="space-y-6"
                 >
-                  <h3 className="font-semibold text-black mb-4">Vitals History - {selectedPatient.name}</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-black/5">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-black">Time</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-black">BP</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-black">HR</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-black">Temp</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-black">RR</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-black">O2</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-black/5">
-                        {vitals.map((v, i) => (
-                          <tr key={i} className="hover:bg-black/5">
-                            <td className="px-4 py-3 text-black/60">{new Date(v.timestamp).toLocaleTimeString()}</td>
-                            <td className="px-4 py-3 font-medium text-black">{v.bp_systolic}/{v.bp_diastolic}</td>
-                            <td className="px-4 py-3 text-black">{v.heart_rate} bpm</td>
-                            <td className="px-4 py-3 text-black">{v.temperature}°F</td>
-                            <td className="px-4 py-3 text-black">{v.respiratory_rate}/min</td>
-                            <td className="px-4 py-3 text-black">{v.oxygen_saturation}%</td>
+                  {/* Vitals Entry Form */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-black/10">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold text-black">Record New Vitals - {selectedPatient.name}</h3>
+                      <button
+                        onClick={() => setShowVitalsForm(!showVitalsForm)}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          showVitalsForm 
+                            ? 'bg-black/10 text-black' 
+                            : 'bg-black text-white hover:bg-black/90'
+                        }`}
+                      >
+                        {showVitalsForm ? '✕ Cancel' : '+ Record Vitals'}
+                      </button>
+                    </div>
+                    
+                    <AnimatePresence>
+                      {showVitalsForm && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="grid grid-cols-4 gap-4 mb-4">
+                            <div>
+                              <label className="block text-xs font-medium text-black/50 mb-1">BP Systolic</label>
+                              <input
+                                type="number"
+                                value={newVitals.bp_systolic}
+                                onChange={(e) => setNewVitals(prev => ({ ...prev, bp_systolic: e.target.value }))}
+                                placeholder="120"
+                                className="w-full px-3 py-2 border border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-black/50 mb-1">BP Diastolic</label>
+                              <input
+                                type="number"
+                                value={newVitals.bp_diastolic}
+                                onChange={(e) => setNewVitals(prev => ({ ...prev, bp_diastolic: e.target.value }))}
+                                placeholder="80"
+                                className="w-full px-3 py-2 border border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-black/50 mb-1">Heart Rate</label>
+                              <input
+                                type="number"
+                                value={newVitals.heart_rate}
+                                onChange={(e) => setNewVitals(prev => ({ ...prev, heart_rate: e.target.value }))}
+                                placeholder="72"
+                                className="w-full px-3 py-2 border border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-black/50 mb-1">Temperature °F</label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={newVitals.temperature}
+                                onChange={(e) => setNewVitals(prev => ({ ...prev, temperature: e.target.value }))}
+                                placeholder="98.6"
+                                className="w-full px-3 py-2 border border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-black/50 mb-1">Respiratory Rate</label>
+                              <input
+                                type="number"
+                                value={newVitals.respiratory_rate}
+                                onChange={(e) => setNewVitals(prev => ({ ...prev, respiratory_rate: e.target.value }))}
+                                placeholder="16"
+                                className="w-full px-3 py-2 border border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-black/50 mb-1">O2 Saturation %</label>
+                              <input
+                                type="number"
+                                value={newVitals.oxygen_saturation}
+                                onChange={(e) => setNewVitals(prev => ({ ...prev, oxygen_saturation: e.target.value }))}
+                                placeholder="98"
+                                className="w-full px-3 py-2 border border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-black/50 mb-1">Weight (lbs)</label>
+                              <input
+                                type="number"
+                                value={newVitals.weight}
+                                onChange={(e) => setNewVitals(prev => ({ ...prev, weight: e.target.value }))}
+                                placeholder="175"
+                                className="w-full px-3 py-2 border border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-black/50 mb-1">Pain Level (0-10)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="10"
+                                value={newVitals.pain_level}
+                                onChange={(e) => setNewVitals(prev => ({ ...prev, pain_level: e.target.value }))}
+                                placeholder="0"
+                                className="w-full px-3 py-2 border border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            onClick={submitVitals}
+                            className="w-full py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-all"
+                          >
+                            ✓ Save Vitals
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Vitals History Table */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-black/10">
+                    <h3 className="font-semibold text-black mb-4">Vitals History</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-black/5">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-black">Time</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-black">BP</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-black">HR</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-black">Temp</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-black">RR</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-black">O2</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-black/5">
+                          {vitals.map((v, i) => (
+                            <tr key={i} className="hover:bg-black/5">
+                              <td className="px-4 py-3 text-black/60">{new Date(v.timestamp).toLocaleTimeString()}</td>
+                              <td className="px-4 py-3 font-medium text-black">{v.bp_systolic}/{v.bp_diastolic}</td>
+                              <td className="px-4 py-3 text-black">{v.heart_rate} bpm</td>
+                              <td className="px-4 py-3 text-black">{v.temperature}°F</td>
+                              <td className="px-4 py-3 text-black">{v.respiratory_rate}/min</td>
+                              <td className="px-4 py-3 text-black">{v.oxygen_saturation}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </motion.div>
               )}
