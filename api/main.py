@@ -1405,6 +1405,40 @@ async def get_access_matrix():
     return {"access_matrix": matrix}
 
 
+@app.post("/admin/run-migrations")
+async def run_migrations():
+    """Manually run database migrations for new columns"""
+    results = []
+    
+    if USE_POSTGRES:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        migrations = [
+            ("patient_prediction_results", "created_by", "TEXT"),
+            ("patient_prediction_results", "visibility", "TEXT DEFAULT 'patient_visible'"),
+            ("patient_prediction_results", "patient_summary_json", "TEXT"),
+        ]
+        
+        for table, column, col_type in migrations:
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}")
+                conn.commit()
+                results.append({"table": table, "column": column, "status": "added"})
+            except Exception as e:
+                conn.rollback()
+                if "already exists" in str(e).lower() or "duplicate" in str(e).lower():
+                    results.append({"table": table, "column": column, "status": "already_exists"})
+                else:
+                    results.append({"table": table, "column": column, "status": "error", "error": str(e)})
+        
+        cursor.close()
+        conn.close()
+        return {"database": "postgresql", "migrations": results}
+    else:
+        return {"database": "sqlite", "message": "SQLite uses CREATE TABLE with all columns"}
+
+
 # ============ Patient Authentication Endpoints ============
 
 @app.post("/auth/register-patient", response_model=PatientRegistrationResponse)
