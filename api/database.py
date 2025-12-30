@@ -265,7 +265,7 @@ def init_postgres_tables():
                     created_by_role TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     encounter_type TEXT DEFAULT 'risk_assessment',
-                    status TEXT DEFAULT 'in_progress',
+                    status TEXT DEFAULT 'draft',
                     completed_at TEXT,
                     visibility TEXT DEFAULT 'clinician_only',
                     notes TEXT

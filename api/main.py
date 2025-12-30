@@ -7939,6 +7939,7 @@ async def find_or_create_draft_encounter(
     encounter_type = request.get("encounter_type", "risk_assessment")
     
     # Try to find existing draft encounter for this patient
+    existing = None
     try:
         existing = execute_query("""
             SELECT encounter_id, created_at, created_by, status 
@@ -7947,28 +7948,29 @@ async def find_or_create_draft_encounter(
             ORDER BY created_at DESC
             LIMIT 1
         """, (patient_id,), fetch='one')
-        
-        if existing:
-            encounter_id, created_at, created_by, status = existing
-            log_access_attempt(
-                user_id=user_id,
-                role=user_role,
-                purpose="encounter_reuse",
-                data_type="encounter",
-                patient_id=patient_id,
-                granted=True,
-                reason=f"Reusing draft encounter {encounter_id}"
-            )
-            return {
-                "encounter_id": encounter_id,
-                "patient_id": patient_id,
-                "created_by": created_by,
-                "created_at": created_at,
-                "status": "draft",
-                "reused": True
-            }
     except Exception as e:
-        print(f"Error finding draft encounter: {e}")
+        print(f"[ENCOUNTER] Error finding draft encounter: {e}")
+        # Table might not exist yet - continue to create
+    
+    if existing:
+        encounter_id, created_at, created_by, status = existing
+        log_access_attempt(
+            user_id=user_id,
+            role=user_role,
+            purpose="encounter_reuse",
+            data_type="encounter",
+            patient_id=patient_id,
+            granted=True,
+            reason=f"Reusing draft encounter {encounter_id}"
+        )
+        return {
+            "encounter_id": encounter_id,
+            "patient_id": patient_id,
+            "created_by": created_by,
+            "created_at": created_at,
+            "status": "draft",
+            "reused": True
+        }
     
     # No draft found - create new one
     encounter_id = f"ENC-{uuid.uuid4().hex[:12].upper()}"
