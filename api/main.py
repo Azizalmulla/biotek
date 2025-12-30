@@ -4406,7 +4406,7 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
                 "validated": clinical_data.get("validated", True),
                 "reference": clinical_data.get("reference", ""),
                 "note": diagnostic_note if diagnostic_threshold_met else clinical_data.get("note", ""),
-                "ml_contribution": round(ml_risk * 100, 1) if ml_risk else None,
+                "ml_contribution": round(ml_risk * 100, 1) if ml_risk is not None else None,
                 "age_group": "young" if patient.age < 50 else ("middle" if patient.age < 70 else "elderly"),
                 "calibrated": True
             },
