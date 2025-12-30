@@ -4406,7 +4406,7 @@ async def predict_multi_disease(
         # Import hospital-grade clinical utilities
         from clinical_utils import (
             get_ml_weight, get_risk_category_score2, calibrate_probability,
-            get_recommendations
+            get_recommendations, compute_severity_assessment
         )
         
         # DYNAMIC ML WEIGHTING BY AGE AND DISEASE TYPE
@@ -4569,28 +4569,66 @@ async def predict_multi_disease(
         if imaging_signal["status"] == "provided" and imaging_signal["direction"] != "neutral":
             clinician_notes.append(f"Imaging findings relevant to {config['name']}")
         
+        # =============================================================================
+        # NEW SEVERITY ARCHITECTURE (v3.0)
+        # Separates: risk_percentage, clinical_status, severity_label
+        # =============================================================================
+        severity_patient_data = {
+            'hba1c': hba1c_val,
+            'fasting_glucose': patient.fasting_glucose,
+            'bp_systolic': patient.bp_systolic,
+            'bp_diastolic': patient.bp_diastolic,
+            'egfr': patient.egfr or 90,
+            'urine_acr': patient.urine_acr or 0,
+            'bmi': patient.bmi,
+            'alt': patient.alt or 0,
+            'smoking_pack_years': smoking_val,
+            'bnp': patient.bnp or 0,
+            'has_cad': False,  # Would come from patient history
+            'has_afib': False,
+            'has_hf': False,
+            'prior_stroke': False,
+            'has_copd': False,
+        }
+        
+        # Compute new severity assessment
+        severity_assessment = compute_severity_assessment(
+            disease_id=disease_id,
+            risk_percentage=round(risk * 100, 1),
+            patient_data=severity_patient_data
+        )
+        
+        # Use new severity_label for display, keep legacy risk_category for backwards compat
+        display_category = severity_assessment["severity_label"]
+        legacy_category = severity_assessment["legacy_risk_category"]
+        
         predictions[disease_id] = {
             "disease_id": disease_id,
             "name": config["name"],
             "risk_score": round(risk, 4),
             "risk_percentage": round(risk * 100, 1),
-            "risk_category": category,
+            # NEW: Three-part severity architecture
+            "clinical_status": severity_assessment["clinical_status"],
+            "severity_label": display_category,
+            "severity_explanation": severity_assessment["severity_explanation"],
+            # LEGACY: Keep risk_category for backwards compatibility
+            "risk_category": legacy_category,
             "risk_source": risk_source,
             "risk_source_note": risk_source_note,
             "confidence": confidence,
             "model_type": model_type,
-            "diagnostic_threshold_met": diagnostic_threshold_met,
-            "diagnostic_note": diagnostic_note,
+            "diagnostic_threshold_met": severity_assessment["clinical_status"] == "diagnosed",
+            "diagnostic_note": severity_assessment["diagnostic_note"] or diagnostic_note,
             "top_factors": top_factors,
             "recommendations": recommendations,
             "clinical_data": {
-                "timeframe": clinical_data.get("timeframe", "10-year") if not diagnostic_threshold_met else "current",
+                "timeframe": clinical_data.get("timeframe", "10-year") if severity_assessment["clinical_status"] != "diagnosed" else "current",
                 "equation": clinical_data.get("equation", "Unknown"),
                 "validated": clinical_data.get("validated", True),
                 "reference": clinical_data.get("reference", ""),
-                "note": diagnostic_note if diagnostic_threshold_met else clinical_data.get("note", ""),
+                "note": severity_assessment["diagnostic_note"] if severity_assessment["clinical_status"] == "diagnosed" else clinical_data.get("note", ""),
                 "ml_estimate": round(ml_risk * 100, 1) if ml_risk is not None else None,
-                "ml_estimate_note": "Secondary ML prediction for reference only" if diagnostic_threshold_met and ml_risk is not None else None,
+                "ml_estimate_note": "Secondary ML prediction for reference only" if severity_assessment["clinical_status"] == "diagnosed" and ml_risk is not None else None,
                 "age_group": "young" if patient.age < 50 else ("middle" if patient.age < 70 else "elderly"),
                 "calibrated": True
             },

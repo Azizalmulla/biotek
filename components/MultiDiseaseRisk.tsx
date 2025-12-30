@@ -18,10 +18,16 @@ interface DiseaseRisk {
   name: string;
   risk_score: number;
   risk_percentage: number;
+  // NEW: Three-part severity architecture
+  clinical_status?: 'diagnosed' | 'not_diagnosed' | 'borderline';
+  severity_label?: string;  // Human-facing label (DIAGNOSED, ELEVATED RISK, etc.)
+  severity_explanation?: string;
+  // LEGACY: Keep for backwards compatibility
   risk_category: 'VERY_HIGH' | 'HIGH' | 'MODERATE' | 'LOW' | 'MINIMAL';
   confidence: number;
   top_factors: { feature: string; importance: number; value: number }[];
   calibration?: CalibrationData;
+  diagnostic_note?: string;
 }
 
 interface DataQuality {
@@ -327,14 +333,80 @@ export default function MultiDiseaseRisk({
     const diseases = Object.keys(DISEASE_ICONS);
     const predictions: Record<string, DiseaseRisk> = {};
     
+    // Disease-specific risk bands for clinically sound mock data
+    const MOCK_RISK_BANDS: Record<string, { elevated: number; moderate: number; low: number }> = {
+      type2_diabetes: { elevated: 0.20, moderate: 0.10, low: 0.05 },
+      hypertension: { elevated: 0.30, moderate: 0.15, low: 0.08 },
+      coronary_heart_disease: { elevated: 0.20, moderate: 0.10, low: 0.05 },
+      chronic_kidney_disease: { elevated: 0.15, moderate: 0.08, low: 0.04 },
+      nafld: { elevated: 0.35, moderate: 0.20, low: 0.10 },
+      stroke: { elevated: 0.15, moderate: 0.08, low: 0.04 },
+      heart_failure: { elevated: 0.10, moderate: 0.05, low: 0.02 },
+      atrial_fibrillation: { elevated: 0.15, moderate: 0.08, low: 0.04 },
+      copd: { elevated: 0.20, moderate: 0.10, low: 0.05 },
+      breast_cancer: { elevated: 0.05, moderate: 0.02, low: 0.01 },
+      colorectal_cancer: { elevated: 0.05, moderate: 0.02, low: 0.01 },
+      alzheimers_disease: { elevated: 0.15, moderate: 0.08, low: 0.04 },
+    };
+    
     diseases.forEach(id => {
-      const risk = Math.random() * 0.6 + 0.1;
+      const risk = Math.random() * 0.4 + 0.02; // 2-42% range
+      const bands = MOCK_RISK_BANDS[id] || { elevated: 0.20, moderate: 0.10, low: 0.05 };
+      
+      // Check if diagnostic criteria might be met based on form data
+      let clinical_status: 'diagnosed' | 'not_diagnosed' | 'borderline' = 'not_diagnosed';
+      let severity_label = 'MINIMAL RISK';
+      let diagnostic_note: string | undefined;
+      
+      // Check diagnostic criteria
+      if (id === 'type2_diabetes' && formData.hba1c >= 6.5) {
+        clinical_status = 'diagnosed';
+        severity_label = 'DIAGNOSED';
+        diagnostic_note = `HbA1c ${formData.hba1c}% ≥6.5% meets ADA criteria`;
+      } else if (id === 'type2_diabetes' && formData.hba1c >= 5.7) {
+        clinical_status = 'borderline';
+        severity_label = 'BORDERLINE';
+        diagnostic_note = 'Prediabetes: HbA1c 5.7-6.4%';
+      } else if (id === 'hypertension' && (formData.bp_systolic >= 140 || formData.bp_diastolic >= 90)) {
+        clinical_status = 'diagnosed';
+        severity_label = 'DIAGNOSED';
+        diagnostic_note = `BP ${formData.bp_systolic}/${formData.bp_diastolic} meets hypertension criteria`;
+      } else if (id === 'hypertension' && (formData.bp_systolic >= 130 || formData.bp_diastolic >= 80)) {
+        clinical_status = 'borderline';
+        severity_label = 'BORDERLINE';
+        diagnostic_note = 'Elevated BP (Stage 1)';
+      } else {
+        // Not diagnosed - use disease-specific risk bands
+        if (risk >= bands.elevated) {
+          severity_label = 'ELEVATED RISK';
+        } else if (risk >= bands.moderate) {
+          severity_label = 'MODERATE RISK';
+        } else if (risk >= bands.low) {
+          severity_label = 'LOW RISK';
+        } else {
+          severity_label = 'MINIMAL RISK';
+        }
+      }
+      
+      // Map to legacy category for backwards compat
+      const legacyMap: Record<string, 'HIGH' | 'MODERATE' | 'LOW' | 'MINIMAL'> = {
+        'DIAGNOSED': 'HIGH',
+        'BORDERLINE': 'MODERATE',
+        'ELEVATED RISK': 'HIGH',
+        'MODERATE RISK': 'MODERATE',
+        'LOW RISK': 'LOW',
+        'MINIMAL RISK': 'MINIMAL',
+      };
+      
       predictions[id] = {
         disease_id: id,
         name: id.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
         risk_score: risk,
         risk_percentage: risk * 100,
-        risk_category: risk > 0.7 ? 'HIGH' : risk > 0.4 ? 'MODERATE' : risk > 0.2 ? 'LOW' : 'MINIMAL',
+        clinical_status,
+        severity_label,
+        diagnostic_note,
+        risk_category: legacyMap[severity_label] || 'MODERATE',
         confidence: 0.85 + Math.random() * 0.1,
         top_factors: [
           { feature: 'age', importance: 0.25, value: formData.age },
@@ -344,8 +416,12 @@ export default function MultiDiseaseRisk({
       };
     });
 
-    const highRisk = Object.values(predictions).filter(p => p.risk_category === 'HIGH');
-    const modRisk = Object.values(predictions).filter(p => p.risk_category === 'MODERATE');
+    const highRisk = Object.values(predictions).filter(p => 
+      p.severity_label === 'DIAGNOSED' || p.severity_label === 'ELEVATED RISK'
+    );
+    const modRisk = Object.values(predictions).filter(p => 
+      p.severity_label === 'BORDERLINE' || p.severity_label === 'MODERATE RISK'
+    );
 
     return {
       timestamp: new Date().toISOString(),
@@ -364,8 +440,21 @@ export default function MultiDiseaseRisk({
     };
   };
 
+  // NEW: Get display label - prefer severity_label, fallback to risk_category
+  const getDisplayLabel = (disease: DiseaseRisk): string => {
+    return disease.severity_label || disease.risk_category;
+  };
+
   const getRiskColor = (category: string) => {
     switch (category) {
+      // New severity labels
+      case 'DIAGNOSED': return 'from-purple-600 to-purple-700';
+      case 'BORDERLINE': return 'from-amber-500 to-amber-600';
+      case 'ELEVATED RISK': return 'from-red-500 to-red-600';
+      case 'MODERATE RISK': return 'from-amber-500 to-orange-500';
+      case 'LOW RISK': return 'from-emerald-500 to-green-600';
+      case 'MINIMAL RISK': return 'from-stone-500 to-stone-600';
+      // Legacy labels (backwards compatibility)
       case 'VERY_HIGH': return 'from-rose-600 to-red-700';
       case 'HIGH': return 'from-red-500 to-red-600';
       case 'MODERATE': return 'from-amber-500 to-orange-500';
@@ -376,6 +465,14 @@ export default function MultiDiseaseRisk({
 
   const getRiskBg = (category: string) => {
     switch (category) {
+      // New severity labels
+      case 'DIAGNOSED': return 'bg-purple-50 border-purple-300';
+      case 'BORDERLINE': return 'bg-amber-50 border-amber-300';
+      case 'ELEVATED RISK': return 'bg-red-50 border-red-200';
+      case 'MODERATE RISK': return 'bg-amber-50 border-amber-200';
+      case 'LOW RISK': return 'bg-emerald-50 border-emerald-200';
+      case 'MINIMAL RISK': return 'bg-stone-50 border-stone-200';
+      // Legacy labels (backwards compatibility)
       case 'VERY_HIGH': return 'bg-rose-50 border-rose-300';
       case 'HIGH': return 'bg-red-50 border-red-200';
       case 'MODERATE': return 'bg-amber-50 border-amber-200';
@@ -914,12 +1011,12 @@ export default function MultiDiseaseRisk({
                       key={disease.disease_id}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className={`p-4 rounded-2xl border ${getRiskBg(disease.risk_category)} transition-all hover:shadow-lg cursor-pointer`}
+                      className={`p-4 rounded-2xl border ${getRiskBg(getDisplayLabel(disease))} transition-all hover:shadow-lg cursor-pointer`}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <span className="text-2xl">{DISEASE_ICONS[disease.disease_id] || '🏥'}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r ${getRiskColor(disease.risk_category)} text-white`}>
-                          {disease.risk_category}
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r ${getRiskColor(getDisplayLabel(disease))} text-white`}>
+                          {getDisplayLabel(disease)}
                         </span>
                       </div>
                       <div className="text-sm font-semibold text-black mb-1 line-clamp-2">
@@ -963,10 +1060,21 @@ export default function MultiDiseaseRisk({
                       {/* Mini bar with confidence interval markers */}
                       <div className="mt-3 h-2 bg-black/10 rounded-full overflow-hidden relative">
                         <div 
-                          className={`h-full bg-gradient-to-r ${getRiskColor(disease.risk_category)} transition-all`}
+                          className={`h-full bg-gradient-to-r ${getRiskColor(getDisplayLabel(disease))} transition-all`}
                           style={{ width: `${Math.min(disease.risk_percentage, 100)}%` }}
                         />
                       </div>
+                      {/* Show diagnostic note if diagnosed */}
+                      {disease.clinical_status === 'diagnosed' && disease.diagnostic_note && (
+                        <div className="mt-2 text-xs text-purple-700 bg-purple-100 rounded px-2 py-1">
+                          ✓ {disease.diagnostic_note}
+                        </div>
+                      )}
+                      {disease.clinical_status === 'borderline' && disease.severity_explanation && (
+                        <div className="mt-2 text-xs text-amber-700 bg-amber-100 rounded px-2 py-1">
+                          ⚠ {disease.severity_explanation}
+                        </div>
+                      )}
                       {/* Population comparison label */}
                       {disease.calibration && (
                         <div className="mt-2 text-xs text-black/50 text-center capitalize">

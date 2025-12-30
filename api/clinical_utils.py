@@ -1,20 +1,319 @@
 """
 Hospital-Grade Clinical Utilities for BioTeK
 Implements SCORE 2 guidelines, input validation, calibration, and actionable recommendations
+
+SEVERITY ARCHITECTURE (v3.0):
+- risk_percentage: Pure ML/statistical probability (never alone determines severity)
+- clinical_status: diagnosed / not_diagnosed (based on guideline criteria)
+- severity_label: Human-facing clinical label (derived from clinical_status + rules)
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
 import numpy as np
 
 
 class RiskCategory(Enum):
+    """Legacy enum - kept for backwards compatibility"""
     MINIMAL = "MINIMAL"
     LOW = "LOW"
     MODERATE = "MODERATE"
     HIGH = "HIGH"
     VERY_HIGH = "VERY_HIGH"
+
+
+class ClinicalStatus(Enum):
+    """Clinical diagnosis status based on guideline criteria"""
+    DIAGNOSED = "diagnosed"
+    NOT_DIAGNOSED = "not_diagnosed"
+    BORDERLINE = "borderline"  # Pre-disease state (e.g., prediabetes)
+
+
+class SeverityLabel(Enum):
+    """Human-facing severity labels - clinically defensible"""
+    DIAGNOSED = "DIAGNOSED"           # Disease clinically present
+    BORDERLINE = "BORDERLINE"         # Pre-disease state
+    ELEVATED_RISK = "ELEVATED RISK"   # High probability, not diagnosed
+    MODERATE_RISK = "MODERATE RISK"   # Moderate probability
+    LOW_RISK = "LOW RISK"             # Low probability  
+    MINIMAL_RISK = "MINIMAL RISK"     # Very low probability
+
+
+# =============================================================================
+# CLINICAL DIAGNOSTIC CRITERIA (Guideline-Based)
+# These determine clinical_status = diagnosed/not_diagnosed
+# =============================================================================
+
+DIAGNOSTIC_CRITERIA = {
+    "type2_diabetes": {
+        "criteria": "ADA 2024 Guidelines",
+        "diagnosed": lambda p: p.get('hba1c', 0) >= 6.5 or p.get('fasting_glucose', 0) >= 126,
+        "borderline": lambda p: 5.7 <= p.get('hba1c', 0) < 6.5 or 100 <= p.get('fasting_glucose', 0) < 126,
+        "diagnosed_note": "HbA1c ≥6.5% or fasting glucose ≥126 mg/dL meets ADA diagnostic criteria",
+        "borderline_note": "Prediabetes: HbA1c 5.7-6.4% or fasting glucose 100-125 mg/dL",
+    },
+    "hypertension": {
+        "criteria": "ACC/AHA 2017 Guidelines",
+        "diagnosed": lambda p: p.get('bp_systolic', 0) >= 140 or p.get('bp_diastolic', 0) >= 90,
+        "borderline": lambda p: (130 <= p.get('bp_systolic', 0) < 140) or (80 <= p.get('bp_diastolic', 0) < 90),
+        "diagnosed_note": "BP ≥140/90 mmHg meets Stage 2 hypertension criteria",
+        "borderline_note": "Elevated BP: 130-139/80-89 mmHg (Stage 1)",
+    },
+    "chronic_kidney_disease": {
+        "criteria": "KDIGO 2024 Guidelines",
+        "diagnosed": lambda p: p.get('egfr', 90) < 60 or p.get('urine_acr', 0) >= 30,
+        "borderline": lambda p: 60 <= p.get('egfr', 90) < 90 and p.get('urine_acr', 0) < 30,
+        "diagnosed_note": "eGFR <60 mL/min or ACR ≥30 mg/g meets CKD criteria",
+        "borderline_note": "Mildly reduced kidney function (eGFR 60-89)",
+    },
+    "nafld": {
+        "criteria": "AASLD 2023 Guidelines",
+        "diagnosed": lambda p: p.get('liver_fat_fraction', 0) > 5 or (p.get('alt', 0) > 40 and p.get('bmi', 0) >= 30),
+        "borderline": lambda p: p.get('alt', 0) > 30 and p.get('bmi', 0) >= 25,
+        "diagnosed_note": "Liver fat >5% or elevated ALT with obesity suggests NAFLD",
+        "borderline_note": "Risk factors present for hepatic steatosis",
+    },
+    "coronary_heart_disease": {
+        "criteria": "Clinical History + Testing",
+        "diagnosed": lambda p: p.get('has_cad', False) or p.get('prior_mi', False) or p.get('coronary_calcium', 0) > 400,
+        "borderline": lambda p: p.get('coronary_calcium', 0) > 100,
+        "diagnosed_note": "Known CAD or prior MI or CAC >400",
+        "borderline_note": "Elevated coronary calcium score (100-400)",
+    },
+    "atrial_fibrillation": {
+        "criteria": "ECG/Clinical Diagnosis",
+        "diagnosed": lambda p: p.get('has_afib', False),
+        "borderline": lambda p: False,  # AF is binary - you have it or you don't
+        "diagnosed_note": "Atrial fibrillation diagnosed on ECG or history",
+        "borderline_note": "",
+    },
+    "heart_failure": {
+        "criteria": "ACC/AHA Heart Failure Guidelines",
+        "diagnosed": lambda p: p.get('has_hf', False) or p.get('bnp', 0) > 400 or p.get('ef', 100) < 40,
+        "borderline": lambda p: 100 < p.get('bnp', 0) <= 400,
+        "diagnosed_note": "Heart failure: EF <40% or BNP >400 pg/mL or clinical diagnosis",
+        "borderline_note": "Elevated BNP suggests cardiac stress",
+    },
+    "stroke": {
+        "criteria": "Clinical History",
+        "diagnosed": lambda p: p.get('prior_stroke', False) or p.get('prior_tia', False),
+        "borderline": lambda p: False,
+        "diagnosed_note": "History of stroke or TIA",
+        "borderline_note": "",
+    },
+    "copd": {
+        "criteria": "GOLD 2024 Guidelines",
+        "diagnosed": lambda p: p.get('fev1_fvc_ratio', 1.0) < 0.7 or p.get('has_copd', False),
+        "borderline": lambda p: p.get('smoking_pack_years', 0) >= 20 and p.get('fev1_fvc_ratio', 1.0) < 0.8,
+        "diagnosed_note": "FEV1/FVC <0.70 meets COPD diagnostic criteria",
+        "borderline_note": "Heavy smoking history with borderline spirometry",
+    },
+    "breast_cancer": {
+        "criteria": "Pathology/Clinical Diagnosis",
+        "diagnosed": lambda p: p.get('has_breast_cancer', False),
+        "borderline": lambda p: p.get('brca_positive', False),
+        "diagnosed_note": "Breast cancer diagnosed",
+        "borderline_note": "BRCA mutation carrier - high genetic risk",
+    },
+    "colorectal_cancer": {
+        "criteria": "Pathology/Clinical Diagnosis",
+        "diagnosed": lambda p: p.get('has_colorectal_cancer', False),
+        "borderline": lambda p: p.get('has_polyps', False),
+        "diagnosed_note": "Colorectal cancer diagnosed",
+        "borderline_note": "History of adenomatous polyps",
+    },
+    "alzheimers_disease": {
+        "criteria": "NIA-AA 2023 Criteria",
+        "diagnosed": lambda p: p.get('has_alzheimers', False) or p.get('mmse', 30) < 24,
+        "borderline": lambda p: 24 <= p.get('mmse', 30) < 27,
+        "diagnosed_note": "Alzheimer's disease diagnosed or MMSE <24",
+        "borderline_note": "Mild cognitive impairment (MMSE 24-26)",
+    },
+}
+
+# =============================================================================
+# DISEASE-SPECIFIC RISK BANDS (for NOT_DIAGNOSED patients)
+# These are calibrated per-disease, NOT global thresholds
+# =============================================================================
+
+DISEASE_RISK_BANDS = {
+    "type2_diabetes": {
+        # FINDRISC-based thresholds
+        "elevated": 0.20,   # ≥20% = elevated risk
+        "moderate": 0.10,   # 10-20% = moderate
+        "low": 0.05,        # 5-10% = low
+        # <5% = minimal
+    },
+    "hypertension": {
+        "elevated": 0.30,   # ≥30% = elevated (very common condition)
+        "moderate": 0.15,
+        "low": 0.08,
+    },
+    "coronary_heart_disease": {
+        # Framingham 10-year risk thresholds
+        "elevated": 0.20,   # ≥20% = high CVD risk
+        "moderate": 0.10,   # 10-20% = intermediate
+        "low": 0.05,        # 5-10% = low-intermediate
+    },
+    "stroke": {
+        "elevated": 0.15,
+        "moderate": 0.08,
+        "low": 0.04,
+    },
+    "chronic_kidney_disease": {
+        "elevated": 0.15,
+        "moderate": 0.08,
+        "low": 0.04,
+    },
+    "nafld": {
+        "elevated": 0.35,   # NAFLD is very prevalent
+        "moderate": 0.20,
+        "low": 0.10,
+    },
+    "heart_failure": {
+        "elevated": 0.10,
+        "moderate": 0.05,
+        "low": 0.02,
+    },
+    "atrial_fibrillation": {
+        "elevated": 0.15,
+        "moderate": 0.08,
+        "low": 0.04,
+    },
+    "copd": {
+        "elevated": 0.20,
+        "moderate": 0.10,
+        "low": 0.05,
+    },
+    "breast_cancer": {
+        # Gail model thresholds - cancer has lower absolute risks
+        "elevated": 0.05,   # ≥5% lifetime = elevated
+        "moderate": 0.02,
+        "low": 0.01,
+    },
+    "colorectal_cancer": {
+        "elevated": 0.05,
+        "moderate": 0.02,
+        "low": 0.01,
+    },
+    "alzheimers_disease": {
+        "elevated": 0.15,
+        "moderate": 0.08,
+        "low": 0.04,
+    },
+}
+
+
+def get_clinical_status(disease_id: str, patient_data: Dict[str, Any]) -> Tuple[ClinicalStatus, Optional[str]]:
+    """
+    Determine clinical status based on guideline diagnostic criteria.
+    
+    Returns:
+        Tuple of (ClinicalStatus, diagnostic_note)
+    """
+    criteria = DIAGNOSTIC_CRITERIA.get(disease_id)
+    if not criteria:
+        return ClinicalStatus.NOT_DIAGNOSED, None
+    
+    try:
+        if criteria["diagnosed"](patient_data):
+            return ClinicalStatus.DIAGNOSED, criteria["diagnosed_note"]
+        elif criteria["borderline"](patient_data):
+            return ClinicalStatus.BORDERLINE, criteria["borderline_note"]
+        else:
+            return ClinicalStatus.NOT_DIAGNOSED, None
+    except Exception:
+        return ClinicalStatus.NOT_DIAGNOSED, None
+
+
+def get_severity_label(
+    disease_id: str,
+    risk_percentage: float,
+    clinical_status: ClinicalStatus,
+    patient_data: Optional[Dict[str, Any]] = None
+) -> Tuple[SeverityLabel, str]:
+    """
+    Derive human-facing severity label from clinical_status + risk rules.
+    
+    RULES:
+    1. If DIAGNOSED → severity = "DIAGNOSED" (ignore probability)
+    2. If BORDERLINE → severity = "BORDERLINE"
+    3. If NOT_DIAGNOSED → use disease-specific probability bands
+    
+    "VERY HIGH" is NEVER used unless diagnosed or explicit guideline criteria.
+    
+    Returns:
+        Tuple of (SeverityLabel, explanation)
+    """
+    # Rule 1: Diagnosed → DIAGNOSED label
+    if clinical_status == ClinicalStatus.DIAGNOSED:
+        return SeverityLabel.DIAGNOSED, "Disease is clinically present based on diagnostic criteria"
+    
+    # Rule 2: Borderline → BORDERLINE label
+    if clinical_status == ClinicalStatus.BORDERLINE:
+        return SeverityLabel.BORDERLINE, "Pre-disease state - intervention may prevent progression"
+    
+    # Rule 3: Not diagnosed → use disease-specific risk bands
+    bands = DISEASE_RISK_BANDS.get(disease_id, {
+        "elevated": 0.20,
+        "moderate": 0.10,
+        "low": 0.05,
+    })
+    
+    risk = risk_percentage / 100.0  # Convert percentage to decimal
+    
+    if risk >= bands["elevated"]:
+        return SeverityLabel.ELEVATED_RISK, f"Risk ≥{int(bands['elevated']*100)}% warrants preventive action"
+    elif risk >= bands["moderate"]:
+        return SeverityLabel.MODERATE_RISK, f"Risk {int(bands['low']*100)}-{int(bands['elevated']*100)}% - monitor and modify risk factors"
+    elif risk >= bands["low"]:
+        return SeverityLabel.LOW_RISK, f"Risk {int(bands['low']*100)}% - continue healthy lifestyle"
+    else:
+        return SeverityLabel.MINIMAL_RISK, "Risk below population average"
+
+
+def compute_severity_assessment(
+    disease_id: str,
+    risk_percentage: float,
+    patient_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Complete severity assessment with all three components.
+    
+    Returns dict with:
+    - risk_percentage: Pure ML probability
+    - clinical_status: diagnosed/not_diagnosed/borderline
+    - severity_label: Human-facing label
+    - severity_explanation: Why this label was assigned
+    - diagnostic_note: Clinical criteria explanation (if applicable)
+    """
+    # Get clinical status from diagnostic criteria
+    clinical_status, diagnostic_note = get_clinical_status(disease_id, patient_data)
+    
+    # Get severity label from status + risk bands
+    severity_label, severity_explanation = get_severity_label(
+        disease_id, risk_percentage, clinical_status, patient_data
+    )
+    
+    # Map new severity to legacy risk_category for backwards compatibility
+    legacy_category_map = {
+        SeverityLabel.DIAGNOSED: "HIGH",  # Diagnosed = treat as high priority
+        SeverityLabel.BORDERLINE: "MODERATE",
+        SeverityLabel.ELEVATED_RISK: "HIGH",
+        SeverityLabel.MODERATE_RISK: "MODERATE",
+        SeverityLabel.LOW_RISK: "LOW",
+        SeverityLabel.MINIMAL_RISK: "MINIMAL",
+    }
+    
+    return {
+        "risk_percentage": round(risk_percentage, 1),
+        "clinical_status": clinical_status.value,
+        "severity_label": severity_label.value,
+        "severity_explanation": severity_explanation,
+        "diagnostic_note": diagnostic_note,
+        "legacy_risk_category": legacy_category_map.get(severity_label, "MODERATE"),
+    }
 
 
 # =============================================================================
