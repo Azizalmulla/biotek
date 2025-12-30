@@ -355,7 +355,7 @@ def calibrate_prediction(raw_prob: float, disease_id: str, patient_age: float,
         "calibration_applied": True
     }
 
-# Import RealDiseaseModel class for unpickling
+# Import model classes for unpickling
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 try:
@@ -366,11 +366,18 @@ except ImportError:
     except ImportError:
         RealDiseaseModel = None
 
+# Import unified model
+unified_disease_model = None
+try:
+    from unified_model import UnifiedDiseaseModel
+except ImportError:
+    UnifiedDiseaseModel = None
+
 @app.on_event("startup")
 async def load_model():
     """Load trained model on startup"""
     global model, feature_names, model_metadata, shap_explainer, medical_knowledge
-    global real_disease_models, real_models_metadata
+    global real_disease_models, real_models_metadata, unified_disease_model
     
     # Try to load base model (optional)
     try:
@@ -435,6 +442,17 @@ async def load_model():
         print(f"  Metadata not loaded: {e}")
     
     print(f"✓ Loaded {len(real_disease_models)}/12 real disease models")
+    
+    # Load UNIFIED model (new architecture - single model for all diseases)
+    unified_model_path = REAL_MODELS_DIR / 'unified_disease_model.pkl'
+    try:
+        if unified_model_path.exists() and UnifiedDiseaseModel is not None:
+            unified_disease_model = UnifiedDiseaseModel.load(str(unified_model_path))
+            print(f"✓ Unified model loaded: {len(unified_disease_model.models)}/12 diseases")
+        else:
+            print(f"  ⚠ Unified model not found at {unified_model_path}")
+    except Exception as e:
+        print(f"  ✗ Unified model load error: {e}")
     
     # Load medical knowledge base
     try:
@@ -4088,6 +4106,7 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
     smoking_val = get_val('smoking_pack_years', patient.smoking_pack_years)
     family_hx_val = get_val('family_history_score', patient.family_history_score)
     on_bp_meds_val = get_val('on_bp_medication', patient.on_bp_medication)
+    egfr_val = get_val('egfr', patient.egfr)  # For unified model
     has_diabetes_val = patient.has_diabetes if patient.has_diabetes is not None else (1 if hba1c_val >= 6.5 else 0)
     
     # Legacy patient features dict (using imputed values for compatibility)
@@ -4199,7 +4218,7 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
             'heart_disease': 0, 'smoking': 1 if smoking_val > 0 else 0, 'bmi': patient.bmi,
             'HbA1c_level': hba1c_val, 'blood_glucose_level': glucose_approx,
             # Stroke dataset
-            'gender': patient.sex, 'ever_married': 1, 'work_type': 2, 'Residence_type': 1,
+            'gender': patient.sex, 'Gender': patient.sex, 'ever_married': 1, 'work_type': 2, 'Residence_type': 1,
             'avg_glucose_level': glucose_approx, 'smoking_status': 1 if smoking_val > 0 else 0,
             # UCI Heart Disease
             'cp': 1, 'trestbps': patient.bp_systolic, 'chol': total_chol_val, 'fbs': 1 if hba1c_val > 6.5 else 0,
@@ -4209,6 +4228,18 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
             'bgr': glucose_approx, 'bu': 44, 'sc': 1.2, 'sod': 138, 'pot': 4.4, 'hemo': 12.5, 'pcv': 40,
             'wbcc': 8000, 'rbcc': 4.7, 'htn': 1 if patient.bp_systolic >= 140 else 0,
             'dm': has_diabetes_val, 'cad': 0, 'appet': 1, 'pe': 0, 'ane': 0,
+            # Alzheimer's dataset features
+            'Ethnicity': 0, 'education_years': 12, 'Smoking': 1 if smoking_val > 0 else 0,
+            'AlcoholConsumption': 5, 'PhysicalActivity': 5, 'DietQuality': 5, 'SleepQuality': 7,
+            'FamilyHistoryAlzheimers': 1 if family_hx_val > 0 else 0, 'CardiovascularDisease': 0,
+            'Diabetes': has_diabetes_val, 'Depression': 0, 'HeadInjury': 0,
+            'Hypertension': 1 if patient.bp_systolic >= 140 else 0,
+            'SystolicBP': patient.bp_systolic, 'DiastolicBP': patient.bp_diastolic,
+            'CholesterolTotal': total_chol_val, 'CholesterolLDL': ldl_val, 'CholesterolHDL': hdl_val,
+            'CholesterolTriglycerides': patient.triglycerides or 120,
+            'MMSE': 28, 'FunctionalAssessment': 8, 'MemoryComplaints': 0, 'BehavioralProblems': 0,
+            'ADL': 9, 'Confusion': 0, 'Disorientation': 0, 'PersonalityChanges': 0,
+            'DifficultyCompletingTasks': 0, 'Forgetfulness': 0, 'Diagnosis': 0,
             # Common mappings
             'total_cholesterol': total_chol_val, 'hdl': hdl_val, 'ldl': ldl_val, 'hba1c': hba1c_val,
             'bp_systolic': patient.bp_systolic, 'bp_diastolic': patient.bp_diastolic,
@@ -4224,14 +4255,32 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
         clinical_data = clinical_risks.get(disease_id, {})
         clinical_risk = clinical_data.get("risk_score", 0.05)
         
-        # Get ML prediction from REAL trained models (XGBoost + LightGBM ensemble)
+        # Get ML prediction - prefer UNIFIED model (consistent, no feature mapping issues)
         ml_risk = None
-        if disease_id in ml_models:
+        
+        # Try unified model first (new architecture)
+        if unified_disease_model is not None and disease_id in unified_disease_model.models:
+            try:
+                # Unified model uses standardized features - no mapping needed!
+                unified_features = pd.DataFrame([[
+                    patient.age, patient.sex, patient.bmi,
+                    patient.bp_systolic, patient.bp_diastolic,
+                    total_chol_val, hdl_val, ldl_val, patient.triglycerides or 150,
+                    hba1c_val, egfr_val, smoking_val, family_hx_val
+                ]], columns=['age', 'sex', 'bmi', 'bp_systolic', 'bp_diastolic',
+                            'total_cholesterol', 'hdl', 'ldl', 'triglycerides',
+                            'hba1c', 'egfr', 'smoking', 'family_history'])
+                
+                all_predictions = unified_disease_model.predict_proba(unified_features)
+                ml_risk = all_predictions.get(disease_id)
+            except Exception as e:
+                print(f"Unified model error for {disease_id}: {e}")
+        
+        # Fallback to old individual models
+        if ml_risk is None and disease_id in ml_models:
             try:
                 model_data = ml_models[disease_id]
-                # Create feature vector matching this model's expected features
                 model_features = get_model_features(disease_id, model_data)
-                # RealDiseaseModel has predict_proba method that handles ensemble
                 if hasattr(model_data, 'predict_proba'):
                     ml_risk = float(model_data.predict_proba(model_features)[0])
             except Exception as e:
