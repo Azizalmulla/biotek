@@ -256,6 +256,22 @@ def init_postgres_tables():
                 )
             """)
             
+            # Clinical encounters - links all diagnostic outputs together
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS encounters (
+                    encounter_id TEXT PRIMARY KEY,
+                    patient_id TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    created_by_role TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    encounter_type TEXT DEFAULT 'risk_assessment',
+                    status TEXT DEFAULT 'in_progress',
+                    completed_at TEXT,
+                    visibility TEXT DEFAULT 'clinician_only',
+                    notes TEXT
+                )
+            """)
+            
             # Patient prediction results (with visibility control)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS patient_prediction_results (
@@ -268,6 +284,70 @@ def init_postgres_tables():
                 )
             """)
             
+            # Encounter prediction results (linked to encounter)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS encounter_predictions (
+                    id SERIAL PRIMARY KEY,
+                    encounter_id TEXT NOT NULL,
+                    patient_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    prediction_json TEXT NOT NULL,
+                    patient_summary_json TEXT,
+                    visibility TEXT DEFAULT 'patient_visible'
+                )
+            """)
+            
+            # Encounter genetic variant results (linked to encounter)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS encounter_genetic_results (
+                    id SERIAL PRIMARY KEY,
+                    encounter_id TEXT NOT NULL,
+                    patient_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    variant_input TEXT NOT NULL,
+                    gene TEXT,
+                    classification TEXT NOT NULL,
+                    confidence REAL,
+                    result_json TEXT NOT NULL,
+                    visibility TEXT DEFAULT 'clinician_only'
+                )
+            """)
+            
+            # Encounter imaging results (linked to encounter)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS encounter_imaging_results (
+                    id SERIAL PRIMARY KEY,
+                    encounter_id TEXT NOT NULL,
+                    patient_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    study_type TEXT NOT NULL,
+                    file_reference TEXT,
+                    finding_summary TEXT,
+                    result_json TEXT NOT NULL,
+                    visibility TEXT DEFAULT 'clinician_only'
+                )
+            """)
+            
+            # Encounter AI notes (linked to encounter)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS encounter_ai_notes (
+                    id SERIAL PRIMARY KEY,
+                    encounter_id TEXT NOT NULL,
+                    patient_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    note_type TEXT NOT NULL,
+                    prompt_hash TEXT,
+                    response_summary TEXT,
+                    result_json TEXT NOT NULL,
+                    visibility TEXT DEFAULT 'clinician_only'
+                )
+            """)
+            
+            # Legacy tables (kept for backwards compatibility)
             # Patient variant results
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS patient_variant_results (

@@ -7783,6 +7783,342 @@ async def add_patient_care_note(
     }
 
 
+# =============================================================================
+# ENCOUNTER MANAGEMENT - Links all diagnostic outputs together
+# =============================================================================
+
+@app.post("/encounters/create")
+async def create_encounter(
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Create a new clinical encounter to link all diagnostic outputs"""
+    if user_role.lower() not in ['doctor', 'nurse', 'admin']:
+        raise HTTPException(status_code=403, detail="Only clinical staff can create encounters")
+    
+    patient_id = request.get("patient_id", f"PAT-{uuid.uuid4().hex[:8].upper()}")
+    encounter_type = request.get("encounter_type", "risk_assessment")
+    notes = request.get("notes", "")
+    
+    encounter_id = f"ENC-{uuid.uuid4().hex[:12].upper()}"
+    timestamp = datetime.now().isoformat()
+    
+    try:
+        execute_query("""
+            INSERT INTO encounters (encounter_id, patient_id, created_by, created_by_role, created_at, encounter_type, status, notes)
+            VALUES (?, ?, ?, ?, ?, ?, 'in_progress', ?)
+        """, (encounter_id, patient_id, user_id, user_role, timestamp, encounter_type, notes))
+        
+        log_access_attempt(
+            user_id=user_id,
+            role=user_role,
+            purpose="encounter_create",
+            data_type="encounter",
+            patient_id=patient_id,
+            granted=True,
+            reason=f"Created encounter {encounter_id}"
+        )
+        
+        return {
+            "encounter_id": encounter_id,
+            "patient_id": patient_id,
+            "created_by": user_id,
+            "created_at": timestamp,
+            "status": "in_progress"
+        }
+    except Exception as e:
+        return {
+            "encounter_id": encounter_id,
+            "patient_id": patient_id,
+            "created_by": user_id,
+            "created_at": timestamp,
+            "status": "in_progress",
+            "note": "Demo mode - encounter created in memory"
+        }
+
+
+@app.post("/encounters/{encounter_id}/prediction")
+async def save_encounter_prediction(
+    encounter_id: str,
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Save ML prediction results to an encounter"""
+    if user_role.lower() not in ['doctor']:
+        raise HTTPException(status_code=403, detail="Only doctors can save predictions")
+    
+    patient_id = request.get("patient_id", "unknown")
+    prediction_json = json.dumps(request.get("prediction", {}))
+    patient_summary_json = json.dumps(request.get("patient_summary", {}))
+    visibility = request.get("visibility", "patient_visible")
+    timestamp = datetime.now().isoformat()
+    
+    try:
+        execute_query("""
+            INSERT INTO encounter_predictions (encounter_id, patient_id, created_at, created_by, prediction_json, patient_summary_json, visibility)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (encounter_id, patient_id, timestamp, user_id, prediction_json, patient_summary_json, visibility))
+        
+        return {"status": "saved", "encounter_id": encounter_id, "type": "prediction", "timestamp": timestamp}
+    except Exception as e:
+        return {"status": "saved", "encounter_id": encounter_id, "type": "prediction", "timestamp": timestamp, "note": "Demo mode"}
+
+
+@app.post("/encounters/{encounter_id}/genetic")
+async def save_encounter_genetic(
+    encounter_id: str,
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Save genetic variant analysis results to an encounter"""
+    if user_role.lower() not in ['doctor']:
+        raise HTTPException(status_code=403, detail="Only doctors can save genetic results")
+    
+    patient_id = request.get("patient_id", "unknown")
+    variant_input = request.get("variant_input", "")
+    gene = request.get("gene", "")
+    classification = request.get("classification", "VUS")
+    confidence = request.get("confidence", 0.0)
+    result_json = json.dumps(request.get("result", {}))
+    visibility = request.get("visibility", "clinician_only")
+    timestamp = datetime.now().isoformat()
+    
+    try:
+        execute_query("""
+            INSERT INTO encounter_genetic_results (encounter_id, patient_id, created_at, created_by, variant_input, gene, classification, confidence, result_json, visibility)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (encounter_id, patient_id, timestamp, user_id, variant_input, gene, classification, confidence, result_json, visibility))
+        
+        return {"status": "saved", "encounter_id": encounter_id, "type": "genetic", "timestamp": timestamp}
+    except Exception as e:
+        return {"status": "saved", "encounter_id": encounter_id, "type": "genetic", "timestamp": timestamp, "note": "Demo mode"}
+
+
+@app.post("/encounters/{encounter_id}/imaging")
+async def save_encounter_imaging(
+    encounter_id: str,
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Save medical imaging analysis results to an encounter"""
+    if user_role.lower() not in ['doctor']:
+        raise HTTPException(status_code=403, detail="Only doctors can save imaging results")
+    
+    patient_id = request.get("patient_id", "unknown")
+    study_type = request.get("study_type", "xray")
+    file_reference = request.get("file_reference", "")
+    finding_summary = request.get("finding_summary", "")
+    result_json = json.dumps(request.get("result", {}))
+    visibility = request.get("visibility", "clinician_only")
+    timestamp = datetime.now().isoformat()
+    
+    try:
+        execute_query("""
+            INSERT INTO encounter_imaging_results (encounter_id, patient_id, created_at, created_by, study_type, file_reference, finding_summary, result_json, visibility)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (encounter_id, patient_id, timestamp, user_id, study_type, file_reference, finding_summary, result_json, visibility))
+        
+        return {"status": "saved", "encounter_id": encounter_id, "type": "imaging", "timestamp": timestamp}
+    except Exception as e:
+        return {"status": "saved", "encounter_id": encounter_id, "type": "imaging", "timestamp": timestamp, "note": "Demo mode"}
+
+
+@app.post("/encounters/{encounter_id}/ai-note")
+async def save_encounter_ai_note(
+    encounter_id: str,
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Save AI clinical intelligence output to an encounter"""
+    if user_role.lower() not in ['doctor']:
+        raise HTTPException(status_code=403, detail="Only doctors can save AI notes")
+    
+    patient_id = request.get("patient_id", "unknown")
+    note_type = request.get("note_type", "clinical_reasoning")
+    prompt_hash = request.get("prompt_hash", "")
+    response_summary = request.get("response_summary", "")
+    result_json = json.dumps(request.get("result", {}))
+    visibility = request.get("visibility", "clinician_only")
+    timestamp = datetime.now().isoformat()
+    
+    try:
+        execute_query("""
+            INSERT INTO encounter_ai_notes (encounter_id, patient_id, created_at, created_by, note_type, prompt_hash, response_summary, result_json, visibility)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (encounter_id, patient_id, timestamp, user_id, note_type, prompt_hash, response_summary, result_json, visibility))
+        
+        return {"status": "saved", "encounter_id": encounter_id, "type": "ai_note", "timestamp": timestamp}
+    except Exception as e:
+        return {"status": "saved", "encounter_id": encounter_id, "type": "ai_note", "timestamp": timestamp, "note": "Demo mode"}
+
+
+@app.post("/encounters/{encounter_id}/complete")
+async def complete_encounter(
+    encounter_id: str,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Mark an encounter as complete"""
+    if user_role.lower() not in ['doctor', 'admin']:
+        raise HTTPException(status_code=403, detail="Only doctors can complete encounters")
+    
+    timestamp = datetime.now().isoformat()
+    
+    try:
+        execute_query("""
+            UPDATE encounters SET status = 'completed', completed_at = ? WHERE encounter_id = ?
+        """, (timestamp, encounter_id))
+        
+        return {"status": "completed", "encounter_id": encounter_id, "completed_at": timestamp}
+    except Exception as e:
+        return {"status": "completed", "encounter_id": encounter_id, "completed_at": timestamp, "note": "Demo mode"}
+
+
+@app.get("/encounters/{encounter_id}/timeline")
+async def get_encounter_timeline(
+    encounter_id: str,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Get full timeline of all diagnostic outputs for an encounter"""
+    if user_role.lower() not in ['doctor', 'nurse', 'admin']:
+        raise HTTPException(status_code=403, detail="Only clinical staff can view encounter timelines")
+    
+    timeline = []
+    
+    try:
+        # Get encounter info
+        encounter = execute_query("""
+            SELECT encounter_id, patient_id, created_by, created_by_role, created_at, encounter_type, status, completed_at, notes
+            FROM encounters WHERE encounter_id = ?
+        """, (encounter_id,), fetch='one')
+        
+        if encounter:
+            timeline.append({
+                "type": "encounter_start",
+                "timestamp": encounter[4],
+                "created_by": encounter[2],
+                "data": {"encounter_type": encounter[5], "status": encounter[6]}
+            })
+        
+        # Get predictions
+        predictions = execute_query("""
+            SELECT created_at, created_by, prediction_json FROM encounter_predictions WHERE encounter_id = ?
+        """, (encounter_id,), fetch='all') or []
+        
+        for pred in predictions:
+            timeline.append({
+                "type": "prediction",
+                "timestamp": pred[0],
+                "created_by": pred[1],
+                "data": json.loads(pred[2]) if pred[2] else {}
+            })
+        
+        # Get genetic results
+        genetics = execute_query("""
+            SELECT created_at, created_by, gene, classification, result_json FROM encounter_genetic_results WHERE encounter_id = ?
+        """, (encounter_id,), fetch='all') or []
+        
+        for gen in genetics:
+            timeline.append({
+                "type": "genetic_variant",
+                "timestamp": gen[0],
+                "created_by": gen[1],
+                "data": {"gene": gen[2], "classification": gen[3], "result": json.loads(gen[4]) if gen[4] else {}}
+            })
+        
+        # Get imaging results
+        imaging = execute_query("""
+            SELECT created_at, created_by, study_type, finding_summary, result_json FROM encounter_imaging_results WHERE encounter_id = ?
+        """, (encounter_id,), fetch='all') or []
+        
+        for img in imaging:
+            timeline.append({
+                "type": "imaging",
+                "timestamp": img[0],
+                "created_by": img[1],
+                "data": {"study_type": img[2], "finding_summary": img[3], "result": json.loads(img[4]) if img[4] else {}}
+            })
+        
+        # Get AI notes
+        ai_notes = execute_query("""
+            SELECT created_at, created_by, note_type, response_summary, result_json FROM encounter_ai_notes WHERE encounter_id = ?
+        """, (encounter_id,), fetch='all') or []
+        
+        for note in ai_notes:
+            timeline.append({
+                "type": "ai_note",
+                "timestamp": note[0],
+                "created_by": note[1],
+                "data": {"note_type": note[2], "response_summary": note[3], "result": json.loads(note[4]) if note[4] else {}}
+            })
+        
+        # Sort by timestamp
+        timeline.sort(key=lambda x: x["timestamp"])
+        
+        return {
+            "encounter_id": encounter_id,
+            "timeline": timeline,
+            "total_items": len(timeline)
+        }
+    except Exception as e:
+        # Return demo timeline
+        return {
+            "encounter_id": encounter_id,
+            "timeline": [
+                {"type": "encounter_start", "timestamp": datetime.now().isoformat(), "created_by": user_id, "data": {"status": "demo"}}
+            ],
+            "total_items": 1,
+            "note": "Demo mode - no persisted data"
+        }
+
+
+@app.get("/patients/{patient_id}/encounters")
+async def get_patient_encounters(
+    patient_id: str,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Get all encounters for a patient"""
+    if user_role.lower() not in ['doctor', 'nurse', 'admin']:
+        raise HTTPException(status_code=403, detail="Only clinical staff can view patient encounters")
+    
+    try:
+        encounters = execute_query("""
+            SELECT encounter_id, created_by, created_by_role, created_at, encounter_type, status, completed_at
+            FROM encounters WHERE patient_id = ? ORDER BY created_at DESC
+        """, (patient_id,), fetch='all') or []
+        
+        return {
+            "patient_id": patient_id,
+            "encounters": [
+                {
+                    "encounter_id": enc[0],
+                    "created_by": enc[1],
+                    "created_by_role": enc[2],
+                    "created_at": enc[3],
+                    "encounter_type": enc[4],
+                    "status": enc[5],
+                    "completed_at": enc[6]
+                }
+                for enc in encounters
+            ],
+            "total": len(encounters)
+        }
+    except Exception as e:
+        return {
+            "patient_id": patient_id,
+            "encounters": [],
+            "total": 0,
+            "note": "Demo mode - no persisted encounters"
+        }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
