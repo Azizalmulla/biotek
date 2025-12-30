@@ -1,36 +1,63 @@
 """
-Database abstraction layer for BioTeK
-Supports both PostgreSQL (production) and SQLite (local development)
-Falls back to SQLite if PostgreSQL connection fails
+Database layer for BioTeK
+PostgreSQL ONLY - No SQLite fallback in production
 """
 
 import os
-import sqlite3
+import sys
 from contextlib import contextmanager
 from typing import Optional, List, Tuple, Any
 
-# Check if PostgreSQL is available and working
-DATABASE_URL = os.getenv('DATABASE_URL')
-USE_POSTGRES = False
+# =============================================================================
+# POSTGRESQL REQUIRED - No SQLite fallback
+# =============================================================================
 
-if DATABASE_URL:
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+# Check for local development mode
+LOCAL_DEV_MODE = os.getenv('LOCAL_DEV', 'false').lower() == 'true'
+
+if not DATABASE_URL:
+    if LOCAL_DEV_MODE:
+        # Allow SQLite only for explicit local development
+        print("⚠ LOCAL_DEV=true: Using SQLite for local development")
+        USE_POSTGRES = False
+    else:
+        print("\n" + "=" * 60)
+        print("❌ FATAL: DATABASE_URL not set — PostgreSQL required")
+        print("=" * 60)
+        print("\nBioTeK requires PostgreSQL in production.")
+        print("Please set DATABASE_URL environment variable.")
+        print("\nExample: DATABASE_URL=postgres://user:pass@host:5432/dbname")
+        print("=" * 60 + "\n")
+        sys.exit(1)
+else:
+    if not DATABASE_URL.startswith('postgres'):
+        print("\n" + "=" * 60)
+        print("❌ FATAL: DATABASE_URL must be a PostgreSQL URL")
+        print("=" * 60)
+        print(f"\nReceived: {DATABASE_URL[:30]}...")
+        print("Expected: postgres://... or postgresql://...")
+        print("=" * 60 + "\n")
+        sys.exit(1)
+    USE_POSTGRES = True
+
+# Import database driver
+if USE_POSTGRES:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+
+    # Test connection on startup
     try:
-        import psycopg2
-        from psycopg2.extras import RealDictCursor
-        # Test the connection
         test_conn = psycopg2.connect(DATABASE_URL)
         test_conn.close()
-        USE_POSTGRES = True
-        print(f"✓ Using PostgreSQL database (connection successful)")
+        print("✓ PostgreSQL connection verified")
     except Exception as e:
-        print(f"⚠ PostgreSQL connection failed: {e}")
-        print("✓ Falling back to SQLite database")
-        USE_POSTGRES = False
+        print(f"\n❌ FATAL: PostgreSQL connection failed: {e}")
+        sys.exit(1)
 else:
-    print("✓ Using SQLite database (no DATABASE_URL set)")
-
-# SQLite database path for local development
-SQLITE_DB_PATH = "biotek_audit.db"
+    import sqlite3
+    SQLITE_DB_PATH = "biotek_local.db"
 
 
 def get_placeholder():
@@ -229,12 +256,15 @@ def init_postgres_tables():
                 )
             """)
             
-            # Patient prediction results
+            # Patient prediction results (with visibility control)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS patient_prediction_results (
                     patient_id TEXT PRIMARY KEY,
                     updated_at TEXT NOT NULL,
-                    prediction_json TEXT NOT NULL
+                    created_by TEXT,
+                    visibility TEXT DEFAULT 'patient_visible',
+                    prediction_json TEXT NOT NULL,
+                    patient_summary_json TEXT
                 )
             """)
             
@@ -422,12 +452,15 @@ def init_sqlite_tables():
         )
     """)
     
-    # Patient prediction results
+    # Patient prediction results (with visibility control)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patient_prediction_results (
             patient_id TEXT PRIMARY KEY,
             updated_at TEXT NOT NULL,
-            prediction_json TEXT NOT NULL
+            created_by TEXT,
+            visibility TEXT DEFAULT 'patient_visible',
+            prediction_json TEXT NOT NULL,
+            patient_summary_json TEXT
         )
     """)
     
@@ -529,20 +562,25 @@ if USE_POSTGRES:
     try:
         init_postgres_tables()
     except Exception as e:
-        print(f"Warning: Failed to initialize PostgreSQL tables: {e}")
-        print("Falling back to SQLite...")
-        USE_POSTGRES = False
-        init_sqlite_tables()
-else:
+        print(f"❌ FATAL: Failed to initialize PostgreSQL tables: {e}")
+        sys.exit(1)
+elif LOCAL_DEV_MODE:
     init_sqlite_tables()
 
 
 def ensure_tables_exist():
     """Ensure all required tables exist - call this before first database operation"""
     if USE_POSTGRES:
-        try:
-            init_postgres_tables()
-        except Exception as e:
-            print(f"Warning: PostgreSQL table creation failed: {e}")
-    else:
+        init_postgres_tables()
+    elif LOCAL_DEV_MODE:
         init_sqlite_tables()
+
+
+def get_db_info() -> dict:
+    """Get database connection info for admin verification"""
+    return {
+        "database_type": "postgresql" if USE_POSTGRES else "sqlite_local_dev",
+        "connection_status": "connected",
+        "local_dev_mode": LOCAL_DEV_MODE,
+        "database_url_set": bool(DATABASE_URL),
+    }

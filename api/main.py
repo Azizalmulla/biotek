@@ -791,22 +791,9 @@ def init_database():
         )
     """)
     
-    # Migration: Add new columns to existing PostgreSQL tables
-    if USE_POSTGRES:
-        migration_columns = [
-            ("patient_prediction_results", "created_by", "TEXT"),
-            ("patient_prediction_results", "visibility", "TEXT DEFAULT 'patient_visible'"),
-            ("patient_prediction_results", "patient_summary_json", "TEXT"),
-        ]
-        for table, column, col_type in migration_columns:
-            try:
-                cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}")
-                conn.commit()
-                print(f"✓ Added column {column} to {table}")
-            except Exception as e:
-                conn.rollback()
-                if "already exists" not in str(e).lower() and "duplicate column" not in str(e).lower():
-                    print(f"Migration warning for {table}.{column}: {e}")
+    # NOTE: Schema migrations are handled by Alembic
+    # Run: POST /admin/run-migrations with X-Admin-Key header
+    # Or: alembic upgrade head
     
     # Patient variant analysis results
     cursor.execute("""
@@ -1406,37 +1393,75 @@ async def get_access_matrix():
 
 
 @app.post("/admin/run-migrations")
-async def run_migrations():
-    """Manually run database migrations for new columns"""
-    results = []
+async def run_migrations(
+    admin_key: str = Header(None, alias="X-Admin-Key")
+):
+    """
+    Run Alembic migrations via API.
+    Protected by admin key.
+    """
+    # Simple protection - in production use proper auth
+    expected_key = os.getenv("ADMIN_API_KEY", "biotek-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
     
-    if USE_POSTGRES:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
         
-        migrations = [
-            ("patient_prediction_results", "created_by", "TEXT"),
-            ("patient_prediction_results", "visibility", "TEXT DEFAULT 'patient_visible'"),
-            ("patient_prediction_results", "patient_summary_json", "TEXT"),
-        ]
-        
-        for table, column, col_type in migrations:
-            try:
-                cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}")
-                conn.commit()
-                results.append({"table": table, "column": column, "status": "added"})
-            except Exception as e:
-                conn.rollback()
-                if "already exists" in str(e).lower() or "duplicate" in str(e).lower():
-                    results.append({"table": table, "column": column, "status": "already_exists"})
-                else:
-                    results.append({"table": table, "column": column, "status": "error", "error": str(e)})
-        
-        cursor.close()
-        conn.close()
-        return {"database": "postgresql", "migrations": results}
-    else:
-        return {"database": "sqlite", "message": "SQLite uses CREATE TABLE with all columns"}
+        return {
+            "status": "success" if result.returncode == 0 else "error",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "return_code": result.returncode
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/admin/db-info")
+async def get_db_info_endpoint(
+    admin_key: str = Header(None, alias="X-Admin-Key")
+):
+    """
+    Get database connection info for verification.
+    Protected by admin key.
+    """
+    expected_key = os.getenv("ADMIN_API_KEY", "biotek-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+    
+    from database import get_db_info
+    
+    info = get_db_info()
+    
+    # Check if columns exist
+    try:
+        query = """
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'patient_prediction_results'
+        """
+        result = execute_query(query, fetch='all')
+        info["patient_prediction_results_columns"] = [row[0] for row in result] if result else []
+    except Exception as e:
+        info["column_check_error"] = str(e)
+    
+    # Get Alembic version
+    try:
+        query = "SELECT version_num FROM alembic_version"
+        result = execute_query(query, fetch='one')
+        info["alembic_version"] = result[0] if result else None
+    except Exception as e:
+        info["alembic_version"] = None
+        info["alembic_note"] = "No migrations run yet or table missing"
+    
+    return info
 
 
 # ============ Patient Authentication Endpoints ============
