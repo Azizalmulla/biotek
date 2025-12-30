@@ -6675,14 +6675,26 @@ async def get_patient_prediction_results(
     Load saved prediction results for a patient.
     
     Access rules:
-    - Patient: Can only access their own data (patient_id == user_id) 
-               Returns patient_summary_json (sanitized, no ML internals)
-    - Doctor/Researcher: Can access any patient's full prediction_json
+    - Patient: Own data only, returns patient_summary_json (no ML internals)
+    - Nurse: Patient-visible results only, returns patient_summary_json
+    - Doctor: Full access, returns prediction_json
+    - Researcher: BLOCKED - use anonymized endpoints instead
+    - Admin/Receptionist: BLOCKED - no clinical data access
     """
     try:
         # ROLE-BASED ACCESS CONTROL
-        is_patient = user_role == "patient"
+        role_lower = (user_role or "").lower()
+        is_patient = role_lower == "patient"
+        is_nurse = role_lower == "nurse"
+        is_doctor = role_lower == "doctor"
         is_own_data = user_id == patient_id
+        
+        # BLOCK: Researchers, admins, receptionists cannot access patient predictions
+        if role_lower in ["researcher", "admin", "receptionist"]:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Role '{role_lower}' cannot access patient prediction data. Use anonymized endpoints for research."
+            )
         
         # Patients can ONLY access their own data
         if is_patient and not is_own_data:
@@ -6723,7 +6735,18 @@ async def get_patient_prediction_results(
                     "note": "This is a simplified view of your results. Contact your doctor for detailed analysis."
                 }
             
-            # Doctor/Researcher: return full prediction data
+            # Nurse role: return sanitized summary only (no ML internals)
+            if is_nurse:
+                return {
+                    "found": True,
+                    "patient_id": patient_id,
+                    "prediction": json.loads(patient_summary_json) if patient_summary_json else None,
+                    "updated_at": updated_at,
+                    "view_type": "nurse_summary",
+                    "note": "Simplified clinical view. Contact physician for detailed ML analysis."
+                }
+            
+            # Doctor: return full prediction data
             return {
                 "found": True,
                 "patient_id": patient_id,

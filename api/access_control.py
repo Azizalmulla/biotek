@@ -51,10 +51,19 @@ class AccessDecision(BaseModel):
     reason: str
     conditions: Optional[dict] = None
 
-# Access Control Matrix
+# =============================================================================
+# ACCESS CONTROL MATRIX - Hospital-Realistic Role Permissions
+# =============================================================================
 # Format: (Role, Purpose) -> Set of allowed data types
+#
+# IMPORTANT: This matrix controls SERVER-SIDE access. UI filtering is secondary.
+# =============================================================================
+
 ACCESS_POLICIES = {
-    # Doctors
+    # =========================================================================
+    # DOCTOR - Full clinical access
+    # =========================================================================
+    # Can: Full predictions, genetics, imaging, AI insights, create/modify
     (Role.DOCTOR, Purpose.TREATMENT): {
         DataType.CLINICAL,
         DataType.GENETIC,
@@ -66,21 +75,35 @@ ACCESS_POLICIES = {
         DataType.PREDICTIONS,
         DataType.MODEL_INFO,
     },
+    (Role.DOCTOR, Purpose.EMERGENCY): {
+        DataType.CLINICAL,
+        DataType.GENETIC,
+        DataType.PREDICTIONS,
+        DataType.DEMOGRAPHICS,
+    },
     
-    # Nurses
+    # =========================================================================
+    # NURSE - Read-only clinical, NO ML internals, NO genetics raw data
+    # =========================================================================
+    # Can: Patient-visible results, labs, vitals, summaries
+    # Cannot: Create predictions, access ML weights, genetic variants
     (Role.NURSE, Purpose.TREATMENT): {
         DataType.CLINICAL,
         DataType.DEMOGRAPHICS,
-        DataType.PREDICTIONS,
+        DataType.PREDICTIONS,  # But API returns patient_summary only for nurses
     },
     (Role.NURSE, Purpose.EMERGENCY): {
         DataType.CLINICAL,
-        DataType.GENETIC,
         DataType.DEMOGRAPHICS,
         DataType.PREDICTIONS,
+        # NOTE: Genetic access removed - nurses get patient-safe summary only
     },
     
-    # Researchers
+    # =========================================================================
+    # RESEARCHER - Anonymized/aggregated ONLY, NO patient identifiers
+    # =========================================================================
+    # Can: Anonymized clinical data, model info, aggregate statistics
+    # Cannot: Direct patient data, per-patient predictions, genetic data
     (Role.RESEARCHER, Purpose.RESEARCH): {
         DataType.ANONYMIZED_CLINICAL,
         DataType.MODEL_INFO,
@@ -88,29 +111,98 @@ ACCESS_POLICIES = {
     (Role.RESEARCHER, Purpose.QUALITY_IMPROVEMENT): {
         DataType.ANONYMIZED_CLINICAL,
         DataType.MODEL_INFO,
-        DataType.PREDICTIONS,
+        # NOTE: PREDICTIONS removed - researchers cannot access patient predictions
     },
     
-    # Admin
+    # =========================================================================
+    # ADMIN - System metrics, audit trail, NO clinical decisions
+    # =========================================================================
+    # Can: Audit logs, system metrics, model info
+    # Cannot: Patient predictions, clinical data, genetic data
     (Role.ADMIN, Purpose.QUALITY_IMPROVEMENT): {
         DataType.AUDIT_LOGS,
         DataType.MODEL_INFO,
-        DataType.ANONYMIZED_CLINICAL,
+        # NOTE: ANONYMIZED_CLINICAL removed - admins don't need clinical data
     },
     
-    # Patients
+    # =========================================================================
+    # PATIENT - Own data ONLY, patient_summary_json ONLY
+    # =========================================================================
+    # Can: Their own predictions (sanitized), their own clinical data
+    # Cannot: Other patients, ML internals, raw genetic variants
     (Role.PATIENT, Purpose.TREATMENT): {
-        DataType.CLINICAL,
-        DataType.GENETIC,
-        DataType.PREDICTIONS,
+        DataType.CLINICAL,      # Own clinical data only
+        DataType.PREDICTIONS,   # API returns patient_summary_json only
+        # NOTE: GENETIC removed - patients see patient-safe summaries only
     },
     
-    # Receptionist
+    # =========================================================================
+    # RECEPTIONIST - Registration/scheduling ONLY, NO medical data
+    # =========================================================================
+    # Can: Patient demographics for registration/scheduling
+    # Cannot: Predictions, clinical data, genetics, imaging
     (Role.RECEPTIONIST, Purpose.REGISTRATION): {
         DataType.DEMOGRAPHICS,
     },
     (Role.RECEPTIONIST, Purpose.BILLING): {
         DataType.DEMOGRAPHICS,
+    },
+}
+
+# =============================================================================
+# ROLE CAPABILITIES SUMMARY (for documentation)
+# =============================================================================
+ROLE_CAPABILITIES = {
+    "doctor": {
+        "predictions": "full_access",           # Full prediction_json
+        "genetics": "full_access",              # ACMG/AMP, pharmacogenomics
+        "imaging": "full_access",               # AI analysis, findings
+        "ai_insights": "full_access",           # Reasoning, treatment optimizer
+        "can_create_predictions": True,
+        "can_set_visibility": True,             # patient_visible / doctor_only
+    },
+    "nurse": {
+        "predictions": "patient_summary_only",  # No ML internals
+        "genetics": "none",                     # No genetic data
+        "imaging": "summary_only",              # No raw analysis
+        "ai_insights": "none",
+        "can_create_predictions": False,
+        "can_set_visibility": False,
+    },
+    "patient": {
+        "predictions": "own_patient_summary",   # Own data, sanitized
+        "genetics": "patient_safe_only",        # Approved summaries only
+        "imaging": "none",
+        "ai_insights": "none",
+        "can_create_predictions": False,
+        "can_set_visibility": False,
+    },
+    "researcher": {
+        "predictions": "anonymized_aggregate",  # No patient identifiers
+        "genetics": "none",
+        "imaging": "none",
+        "ai_insights": "none",
+        "can_create_predictions": False,
+        "can_set_visibility": False,
+    },
+    "admin": {
+        "predictions": "none",                  # No clinical data
+        "genetics": "none",
+        "imaging": "none",
+        "ai_insights": "none",
+        "audit_logs": "full_access",
+        "system_metrics": "full_access",
+        "can_create_predictions": False,
+        "can_set_visibility": False,
+    },
+    "receptionist": {
+        "predictions": "none",
+        "genetics": "none",
+        "imaging": "none",
+        "ai_insights": "none",
+        "demographics": "read_write",           # Registration only
+        "can_create_predictions": False,
+        "can_set_visibility": False,
     },
 }
 
