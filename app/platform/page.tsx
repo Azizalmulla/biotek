@@ -64,6 +64,10 @@ export default function PlatformPage() {
   const [patientHistory, setPatientHistory] = useState<any>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   
+  // Encounter state - links all diagnostic outputs together
+  const [currentEncounterId, setCurrentEncounterId] = useState<string | null>(null);
+  const [encounterStatus, setEncounterStatus] = useState<'none' | 'in_progress' | 'completed'>('none');
+  
   // Patient-specific chat memory
   const [patientChatHistories, setPatientChatHistories] = useState<Record<string, Array<{role: 'user' | 'assistant', content: string, timestamp?: string}>>>({});
 
@@ -376,6 +380,164 @@ export default function PlatformPage() {
       });
     } catch (error) {
       console.error('Failed to save clinical reasoning:', error);
+    }
+  };
+
+  // =========================================================================
+  // ENCOUNTER MANAGEMENT - Links all diagnostic outputs together
+  // =========================================================================
+  
+  // Create a new encounter when starting an assessment
+  const createEncounter = async (patientId: string): Promise<string | null> => {
+    if (!patientId || session?.role !== 'doctor') return null;
+    
+    try {
+      const response = await fetch(`${API_BASE}/encounters/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': session?.userId || 'unknown',
+          'X-User-Role': session?.role || 'doctor'
+        },
+        body: JSON.stringify({
+          patient_id: patientId,
+          encounter_type: 'risk_assessment'
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentEncounterId(data.encounter_id);
+        setEncounterStatus('in_progress');
+        console.log('✓ Encounter created:', data.encounter_id);
+        return data.encounter_id;
+      }
+    } catch (error) {
+      console.error('Failed to create encounter:', error);
+    }
+    return null;
+  };
+
+  // Save prediction to encounter
+  const saveEncounterPrediction = async (encounterId: string, patientId: string, predictionData: any) => {
+    if (!encounterId || session?.role !== 'doctor') return;
+    
+    try {
+      await fetch(`${API_BASE}/encounters/${encounterId}/prediction`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': session?.userId || 'unknown',
+          'X-User-Role': session?.role || 'doctor'
+        },
+        body: JSON.stringify({
+          patient_id: patientId,
+          prediction: predictionData,
+          visibility: 'patient_visible'
+        })
+      });
+      console.log('✓ Prediction saved to encounter:', encounterId);
+    } catch (error) {
+      console.error('Failed to save prediction to encounter:', error);
+    }
+  };
+
+  // Save genetic variant result to encounter
+  const saveEncounterGenetic = async (encounterId: string, patientId: string, variantData: any) => {
+    if (!encounterId || session?.role !== 'doctor') return;
+    
+    try {
+      await fetch(`${API_BASE}/encounters/${encounterId}/genetic`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': session?.userId || 'unknown',
+          'X-User-Role': session?.role || 'doctor'
+        },
+        body: JSON.stringify({
+          patient_id: patientId,
+          variant_input: variantData.variant || '',
+          gene: variantData.gene || '',
+          classification: variantData.classification || 'VUS',
+          confidence: variantData.confidence || 0,
+          result: variantData,
+          visibility: 'clinician_only'
+        })
+      });
+      console.log('✓ Genetic result saved to encounter:', encounterId);
+    } catch (error) {
+      console.error('Failed to save genetic to encounter:', error);
+    }
+  };
+
+  // Save imaging result to encounter
+  const saveEncounterImaging = async (encounterId: string, patientId: string, imagingData: any) => {
+    if (!encounterId || session?.role !== 'doctor') return;
+    
+    try {
+      await fetch(`${API_BASE}/encounters/${encounterId}/imaging`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': session?.userId || 'unknown',
+          'X-User-Role': session?.role || 'doctor'
+        },
+        body: JSON.stringify({
+          patient_id: patientId,
+          study_type: imagingData.study_type || 'xray',
+          finding_summary: imagingData.finding_summary || '',
+          result: imagingData,
+          visibility: 'clinician_only'
+        })
+      });
+      console.log('✓ Imaging result saved to encounter:', encounterId);
+    } catch (error) {
+      console.error('Failed to save imaging to encounter:', error);
+    }
+  };
+
+  // Save AI note to encounter
+  const saveEncounterAINote = async (encounterId: string, patientId: string, noteData: any) => {
+    if (!encounterId || session?.role !== 'doctor') return;
+    
+    try {
+      await fetch(`${API_BASE}/encounters/${encounterId}/ai-note`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': session?.userId || 'unknown',
+          'X-User-Role': session?.role || 'doctor'
+        },
+        body: JSON.stringify({
+          patient_id: patientId,
+          note_type: noteData.note_type || 'clinical_reasoning',
+          response_summary: noteData.response_summary || '',
+          result: noteData,
+          visibility: 'clinician_only'
+        })
+      });
+      console.log('✓ AI note saved to encounter:', encounterId);
+    } catch (error) {
+      console.error('Failed to save AI note to encounter:', error);
+    }
+  };
+
+  // Complete encounter
+  const completeEncounter = async (encounterId: string) => {
+    if (!encounterId || session?.role !== 'doctor') return;
+    
+    try {
+      await fetch(`${API_BASE}/encounters/${encounterId}/complete`, {
+        method: 'POST',
+        headers: {
+          'X-User-ID': session?.userId || 'unknown',
+          'X-User-Role': session?.role || 'doctor'
+        }
+      });
+      setEncounterStatus('completed');
+      console.log('✓ Encounter completed:', encounterId);
+    } catch (error) {
+      console.error('Failed to complete encounter:', error);
     }
   };
 
@@ -749,16 +911,50 @@ export default function PlatformPage() {
         {/* Patient Selector - Always visible for doctors/nurses */}
         {session && ['doctor', 'nurse'].includes(session.role) && (
           <PatientSelector 
-            onSelect={(patientId) => {
+            onSelect={async (patientId) => {
               setCurrentPatientId(patientId);
+              // Reset encounter when patient changes
+              setCurrentEncounterId(null);
+              setEncounterStatus('none');
+              
               if (patientId) {
                 loadPatientHistory(patientId);
+                // Auto-create encounter for doctors when selecting a patient
+                if (session?.role === 'doctor') {
+                  await createEncounter(patientId);
+                }
               } else {
                 setPatientHistory(null);
               }
             }}
             currentPatientId={currentPatientId || undefined}
           />
+        )}
+        
+        {/* Active Encounter Indicator */}
+        {currentEncounterId && session?.role === 'doctor' && (
+          <div className="mb-4 bg-green-50 border border-green-200 rounded-xl p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              <span className="text-sm text-green-800 font-medium">
+                Active Encounter: {currentEncounterId}
+              </span>
+              <span className="text-xs text-green-600">
+                • All diagnostic outputs will be linked to this encounter
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                if (currentEncounterId) {
+                  completeEncounter(currentEncounterId);
+                  setCurrentEncounterId(null);
+                }
+              }}
+              className="text-xs bg-green-600 text-white px-3 py-1 rounded-full hover:bg-green-700"
+            >
+              Complete Encounter
+            </button>
+          </div>
         )}
         
         {/* Patient History Indicator */}
@@ -813,14 +1009,19 @@ export default function PlatformPage() {
                 onPredictionComplete={(data) => {
                   setPrediction(data);
                   setMultiDiseaseData(data);
-                  // Auto-save prediction to patient record
+                  // Save to patient record (legacy)
                   if (currentPatientId) {
                     savePatientPrediction(currentPatientId, data);
+                  }
+                  // Save to encounter (new - links to encounter_id)
+                  if (currentEncounterId && currentPatientId) {
+                    saveEncounterPrediction(currentEncounterId, currentPatientId, data);
                   }
                 }}
                 patientId={currentPatientId}
                 userId={session?.userId}
                 userRole={session?.role}
+                encounterId={currentEncounterId}
               />
             </motion.div>
           )}
@@ -836,10 +1037,17 @@ export default function PlatformPage() {
             >
               <VariantAnalyzer 
                 patientId={currentPatientId}
-                onResultSaved={() => {
+                encounterId={currentEncounterId}
+                userId={session?.userId}
+                userRole={session?.role}
+                onResultSaved={(variantData) => {
                   // Refresh patient history after saving
                   if (currentPatientId) {
                     loadPatientHistory(currentPatientId);
+                  }
+                  // Save to encounter
+                  if (currentEncounterId && currentPatientId && variantData) {
+                    saveEncounterGenetic(currentEncounterId, currentPatientId, variantData);
                   }
                 }}
               />
@@ -855,7 +1063,22 @@ export default function PlatformPage() {
               exit={{ opacity: 0, y: -20 }}
               className="max-w-4xl mx-auto"
             >
-              <AdvancedMedicalImaging />
+              <AdvancedMedicalImaging 
+                patientId={currentPatientId}
+                encounterId={currentEncounterId}
+                userId={session?.userId}
+                userRole={session?.role}
+                onResultSaved={(imagingData) => {
+                  // Save to encounter
+                  if (currentEncounterId && currentPatientId && imagingData) {
+                    saveEncounterImaging(currentEncounterId, currentPatientId, {
+                      study_type: 'medical_imaging',
+                      finding_summary: imagingData.data?.analysis?.substring(0, 200) || '',
+                      ...imagingData
+                    });
+                  }
+                }}
+              />
             </motion.div>
           )}
 
@@ -1039,9 +1262,17 @@ export default function PlatformPage() {
                               });
                               const data = await response.json();
                               setClinicalReasoning(data);
-                              // Auto-save to patient record
+                              // Auto-save to patient record (legacy)
                               if (currentPatientId) {
                                 savePatientClinicalReasoning(currentPatientId, data);
+                              }
+                              // Save to encounter (new)
+                              if (currentEncounterId && currentPatientId) {
+                                saveEncounterAINote(currentEncounterId, currentPatientId, {
+                                  note_type: 'clinical_reasoning',
+                                  response_summary: data.reasoning?.substring(0, 200) || 'Clinical reasoning analysis',
+                                  ...data
+                                });
                               }
                             } catch (error) {
                               console.error('Clinical reasoning failed:', error);
@@ -1241,9 +1472,17 @@ export default function PlatformPage() {
                               const data = await response.json();
                               console.log('Treatment data:', data);
                               setTreatment(data);
-                              // Auto-save to patient record
+                              // Auto-save to patient record (legacy)
                               if (currentPatientId) {
                                 savePatientTreatment(currentPatientId, data);
+                              }
+                              // Save to encounter (new)
+                              if (currentEncounterId && currentPatientId) {
+                                saveEncounterAINote(currentEncounterId, currentPatientId, {
+                                  note_type: 'treatment_optimization',
+                                  response_summary: 'AI-generated treatment protocol',
+                                  ...data
+                                });
                               }
                             } catch (error) {
                               console.error('Treatment optimization failed:', error);

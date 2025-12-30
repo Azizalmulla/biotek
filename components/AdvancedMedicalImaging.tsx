@@ -47,7 +47,15 @@ const IMAGE_TYPES = ['xray', 'ct', 'mri', 'ultrasound', 'pathology'];
 const VIDEO_TYPES = ['ultrasound', 'echocardiogram', 'fluoroscopy'];
 const DOCUMENT_TYPES = ['lab_report', 'prescription', 'ehr', 'pathology', 'radiology_report'];
 
-export default function AdvancedMedicalImaging() {
+interface AdvancedMedicalImagingProps {
+  patientId?: string | null;
+  encounterId?: string | null;
+  userId?: string;
+  userRole?: string;
+  onResultSaved?: (result: AnalysisResult) => void;
+}
+
+export default function AdvancedMedicalImaging({ patientId, encounterId, userId, userRole, onResultSaved }: AdvancedMedicalImagingProps) {
   const [mode, setMode] = useState<AnalysisMode>('standard');
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);

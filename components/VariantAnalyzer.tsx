@@ -63,10 +63,13 @@ const EXAMPLE_VARIANTS = [
 
 interface VariantAnalyzerProps {
   patientId?: string | null;
+  encounterId?: string | null;
+  userId?: string;
+  userRole?: string;
   onResultSaved?: (result: VariantResult) => void;
 }
 
-export default function VariantAnalyzer({ patientId, onResultSaved }: VariantAnalyzerProps) {
+export default function VariantAnalyzer({ patientId, encounterId, userId, userRole, onResultSaved }: VariantAnalyzerProps) {
   const [variantInput, setVariantInput] = useState('');
   const [selectedGene, setSelectedGene] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);

@@ -88,6 +88,7 @@ interface MultiDiseaseRiskProps {
   patientId?: string | null;
   userId?: string;
   userRole?: string;
+  encounterId?: string | null;
 }
 
 const DEFAULT_FORM_DATA = {
