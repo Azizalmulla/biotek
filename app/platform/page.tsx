@@ -67,7 +67,7 @@ export default function PlatformPage() {
   
   // Encounter state - links all diagnostic outputs together
   const [currentEncounterId, setCurrentEncounterId] = useState<string | null>(null);
-  const [encounterStatus, setEncounterStatus] = useState<'none' | 'in_progress' | 'completed'>('none');
+  const [encounterStatus, setEncounterStatus] = useState<'none' | 'draft' | 'completed'>('none');
   const [showTimeline, setShowTimeline] = useState(false);
   
   // Patient-specific chat memory
@@ -389,12 +389,12 @@ export default function PlatformPage() {
   // ENCOUNTER MANAGEMENT - Links all diagnostic outputs together
   // =========================================================================
   
-  // Create a new encounter when starting an assessment
-  const createEncounter = async (patientId: string): Promise<string | null> => {
+  // Find or create DRAFT encounter (reuses existing draft if available)
+  const findOrCreateDraftEncounter = async (patientId: string): Promise<string | null> => {
     if (!patientId || session?.role !== 'doctor') return null;
     
     try {
-      const response = await fetch(`${API_BASE}/encounters/create`, {
+      const response = await fetch(`${API_BASE}/encounters/find-or-create-draft`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -410,15 +410,18 @@ export default function PlatformPage() {
       if (response.ok) {
         const data = await response.json();
         setCurrentEncounterId(data.encounter_id);
-        setEncounterStatus('in_progress');
-        console.log('✓ Encounter created:', data.encounter_id);
+        setEncounterStatus('draft');
+        console.log(data.reused ? '✓ Reusing draft encounter:' : '✓ Created new draft encounter:', data.encounter_id);
         return data.encounter_id;
       }
     } catch (error) {
-      console.error('Failed to create encounter:', error);
+      console.error('Failed to find/create encounter:', error);
     }
     return null;
   };
+  
+  // Legacy alias for backward compatibility
+  const createEncounter = findOrCreateDraftEncounter;
 
   // Save prediction to encounter
   const saveEncounterPrediction = async (encounterId: string, patientId: string, predictionData: any) => {
@@ -933,37 +936,57 @@ export default function PlatformPage() {
           />
         )}
         
-        {/* Active Encounter Indicator */}
-        {currentEncounterId && session?.role === 'doctor' && (
-          <div className="mb-4 bg-green-50 border border-green-200 rounded-xl p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              <span className="text-sm text-green-800 font-medium">
-                Active Encounter: {currentEncounterId}
+        {/* Active Draft Encounter Indicator */}
+        {currentEncounterId && session?.role === 'doctor' && encounterStatus === 'draft' && (
+          <div className="mb-4 bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+                <span className="text-sm text-amber-800 font-bold">
+                  📝 Draft Encounter
+                </span>
+              </div>
+              <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                {currentEncounterId}
               </span>
-              <span className="text-xs text-green-600">
-                • All diagnostic outputs will be linked to this encounter
+              <span className="text-xs text-amber-600">
+                • Autosaving • Re-run analysis to update
               </span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowTimeline(true)}
-                className="text-xs bg-white border border-green-300 text-green-700 px-3 py-1 rounded-full hover:bg-green-100"
+                className="text-xs bg-white border border-amber-300 text-amber-700 px-3 py-1.5 rounded-full hover:bg-amber-100 font-medium"
               >
                 📋 View Timeline
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (currentEncounterId) {
-                    completeEncounter(currentEncounterId);
-                    setCurrentEncounterId(null);
+                    await completeEncounter(currentEncounterId);
+                    setEncounterStatus('completed');
+                    // Clear encounter so next run creates new draft
+                    setTimeout(() => {
+                      setCurrentEncounterId(null);
+                      setEncounterStatus('none');
+                    }, 2000);
                   }
                 }}
-                className="text-xs bg-green-600 text-white px-3 py-1 rounded-full hover:bg-green-700"
+                className="text-xs bg-green-600 text-white px-4 py-1.5 rounded-full hover:bg-green-700 font-medium flex items-center gap-1"
               >
-                Complete Encounter
+                ✓ Complete & Lock Encounter
               </button>
             </div>
+          </div>
+        )}
+        
+        {/* Completed Encounter Indicator (brief) */}
+        {encounterStatus === 'completed' && (
+          <div className="mb-4 bg-green-50 border border-green-300 rounded-xl p-3 flex items-center gap-2">
+            <span className="text-green-600">✅</span>
+            <span className="text-sm text-green-800 font-medium">
+              Encounter completed and locked. Next analysis will start a new encounter.
+            </span>
           </div>
         )}
         

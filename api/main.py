@@ -7915,28 +7915,70 @@ async def add_patient_care_note(
 # ENCOUNTER MANAGEMENT - Links all diagnostic outputs together
 # =============================================================================
 
-@app.post("/encounters/create")
-async def create_encounter(
+@app.post("/encounters/find-or-create-draft")
+async def find_or_create_draft_encounter(
     request: dict,
     user_role: str = Header("doctor", alias="X-User-Role"),
     user_id: str = Header("anonymous", alias="X-User-ID")
 ):
-    """Create a new clinical encounter to link all diagnostic outputs"""
+    """
+    Find existing DRAFT encounter for patient, or create new one.
+    This enables the draft-upsert + finalize-lock workflow.
+    
+    - If patient has status='draft' encounter, return it (reuse)
+    - Otherwise create new draft encounter
+    - Once encounter is 'completed', it's frozen - new runs create new draft
+    """
     if user_role.lower() not in ['doctor', 'nurse', 'admin']:
         raise HTTPException(status_code=403, detail="Only clinical staff can create encounters")
     
-    patient_id = request.get("patient_id", f"PAT-{uuid.uuid4().hex[:8].upper()}")
-    encounter_type = request.get("encounter_type", "risk_assessment")
-    notes = request.get("notes", "")
+    patient_id = request.get("patient_id")
+    if not patient_id:
+        raise HTTPException(status_code=400, detail="patient_id is required")
     
+    encounter_type = request.get("encounter_type", "risk_assessment")
+    
+    # Try to find existing draft encounter for this patient
+    try:
+        existing = execute_query("""
+            SELECT encounter_id, created_at, created_by, status 
+            FROM encounters 
+            WHERE patient_id = ? AND status = 'draft'
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (patient_id,), fetch='one')
+        
+        if existing:
+            encounter_id, created_at, created_by, status = existing
+            log_access_attempt(
+                user_id=user_id,
+                role=user_role,
+                purpose="encounter_reuse",
+                data_type="encounter",
+                patient_id=patient_id,
+                granted=True,
+                reason=f"Reusing draft encounter {encounter_id}"
+            )
+            return {
+                "encounter_id": encounter_id,
+                "patient_id": patient_id,
+                "created_by": created_by,
+                "created_at": created_at,
+                "status": "draft",
+                "reused": True
+            }
+    except Exception as e:
+        print(f"Error finding draft encounter: {e}")
+    
+    # No draft found - create new one
     encounter_id = f"ENC-{uuid.uuid4().hex[:12].upper()}"
     timestamp = datetime.now().isoformat()
     
     try:
         execute_query("""
             INSERT INTO encounters (encounter_id, patient_id, created_by, created_by_role, created_at, encounter_type, status, notes)
-            VALUES (?, ?, ?, ?, ?, ?, 'in_progress', ?)
-        """, (encounter_id, patient_id, user_id, user_role, timestamp, encounter_type, notes))
+            VALUES (?, ?, ?, ?, ?, ?, 'draft', '')
+        """, (encounter_id, patient_id, user_id, user_role, timestamp, encounter_type))
         
         log_access_attempt(
             user_id=user_id,
@@ -7945,7 +7987,7 @@ async def create_encounter(
             data_type="encounter",
             patient_id=patient_id,
             granted=True,
-            reason=f"Created encounter {encounter_id}"
+            reason=f"Created draft encounter {encounter_id}"
         )
         
         return {
@@ -7953,17 +7995,30 @@ async def create_encounter(
             "patient_id": patient_id,
             "created_by": user_id,
             "created_at": timestamp,
-            "status": "in_progress"
+            "status": "draft",
+            "reused": False
         }
     except Exception as e:
+        # Fallback for demo mode
         return {
             "encounter_id": encounter_id,
             "patient_id": patient_id,
             "created_by": user_id,
             "created_at": timestamp,
-            "status": "in_progress",
+            "status": "draft",
+            "reused": False,
             "note": "Demo mode - encounter created in memory"
         }
+
+
+@app.post("/encounters/create")
+async def create_encounter(
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Legacy endpoint - redirects to find-or-create-draft"""
+    return await find_or_create_draft_encounter(request, user_role, user_id)
 
 
 @app.post("/encounters/{encounter_id}/prediction")
@@ -7973,7 +8028,13 @@ async def save_encounter_prediction(
     user_role: str = Header("doctor", alias="X-User-Role"),
     user_id: str = Header("anonymous", alias="X-User-ID")
 ):
-    """Save ML prediction results to an encounter"""
+    """
+    Save/upsert ML prediction results to a DRAFT encounter.
+    
+    - For draft encounters: DELETE old prediction, INSERT new (upsert behavior)
+    - For completed encounters: Reject with 403
+    - Logs audit event for each save
+    """
     if user_role.lower() not in ['doctor']:
         raise HTTPException(status_code=403, detail="Only doctors can save predictions")
     
@@ -7984,12 +8045,38 @@ async def save_encounter_prediction(
     timestamp = datetime.now().isoformat()
     
     try:
+        # Check if encounter is completed (frozen)
+        enc_status = execute_query("""
+            SELECT status FROM encounters WHERE encounter_id = ?
+        """, (encounter_id,), fetch='one')
+        
+        if enc_status and enc_status[0] == 'completed':
+            raise HTTPException(status_code=403, detail="Cannot modify completed encounter. Create a new encounter.")
+        
+        # UPSERT: Delete existing prediction for this encounter, then insert new
+        execute_query("""
+            DELETE FROM encounter_predictions WHERE encounter_id = ?
+        """, (encounter_id,))
+        
         execute_query("""
             INSERT INTO encounter_predictions (encounter_id, patient_id, created_at, created_by, prediction_json, patient_summary_json, visibility)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (encounter_id, patient_id, timestamp, user_id, prediction_json, patient_summary_json, visibility))
         
-        return {"status": "saved", "encounter_id": encounter_id, "type": "prediction", "timestamp": timestamp}
+        # Log audit event
+        log_access_attempt(
+            user_id=user_id,
+            role=user_role,
+            purpose="analysis_rerun",
+            data_type="prediction",
+            patient_id=patient_id,
+            granted=True,
+            reason=f"Prediction upserted to draft encounter {encounter_id}"
+        )
+        
+        return {"status": "saved", "encounter_id": encounter_id, "type": "prediction", "timestamp": timestamp, "upsert": True}
+    except HTTPException:
+        raise
     except Exception as e:
         return {"status": "saved", "encounter_id": encounter_id, "type": "prediction", "timestamp": timestamp, "note": "Demo mode"}
 
