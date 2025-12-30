@@ -141,13 +141,15 @@ export default function LoginPage() {
       localStorage.setItem('biotek_session', JSON.stringify(sessionData));
 
       // Redirect based on role
-      if (selectedRole === 'patient') {
-        // Patients go to consent first, then to patient dashboard
-        router.push('/consent');
-      } else {
-        // Healthcare workers go directly to platform
-        router.push('/platform');
-      }
+      const roleRoutes: Record<string, string> = {
+        patient: '/consent',           // Patients → consent → patient-dashboard
+        doctor: '/platform',           // Doctors → full platform
+        nurse: '/platform',            // Nurses → platform (limited tabs)
+        researcher: '/researcher',     // Researchers → research portal
+        receptionist: '/receptionist', // Receptionists → reception desk
+        admin: '/admin',               // Admins → admin dashboard
+      };
+      router.push(roleRoutes[sessionData.role] || '/platform');
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.');
     } finally {
