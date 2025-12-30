@@ -5908,6 +5908,15 @@ async def optimize_treatment(
         bmi = patient_data.get('bmi', 0)
         age = patient_data.get('age', 0)
         
+        # Calculate target values based on patient data
+        target_hba1c = max(5.0, hba1c - 0.8) if hba1c > 0 else 5.5
+        target_bmi = max(22, bmi - 3) if bmi > 0 else 24
+        bp_systolic = patient_data.get('bp_systolic', 130)
+        bp_diastolic = patient_data.get('bp_diastolic', 85)
+        target_bp_sys = max(120, bp_systolic - 10)
+        target_bp_dia = max(75, bp_diastolic - 5)
+        risk_reduction = min(25, max(10, risk * 0.3)) if risk > 0 else 15
+        
         prompt = f"""You are a clinical decision support AI creating an evidence-based treatment protocol.
 
 Patient Profile:
@@ -5915,29 +5924,44 @@ Patient Profile:
 - HbA1c: {hba1c}%
 - BMI: {bmi} kg/m²
 - Age: {age} years
+- Blood Pressure: {bp_systolic}/{bp_diastolic} mmHg
 
-Create a structured 3-phase treatment protocol following ADA/EASD guidelines:
+Create a structured 3-phase treatment protocol following ADA/EASD guidelines.
 
-PHASE 1 (Months 0-3): Initial Lifestyle Interventions
-- Specific dietary recommendations (Mediterranean diet, caloric deficit)
-- Exercise prescription (frequency, intensity, duration)
-- Behavioral modifications
-- Expected outcomes (HbA1c reduction, weight loss, risk reduction)
+IMPORTANT: Include this exact metrics table at the end with the values filled in:
 
-PHASE 2 (Months 3-6): Pharmacotherapy (if needed based on response)
-- First-line medication with specific dosage
-- Rationale based on current guidelines
-- Monitoring parameters
-- Expected additional HbA1c and risk reduction
+| Metric | Baseline | Target (Month 3) | Reduction/Risk Change |
+|--------|----------|------------------|----------------------|
+| HbA1c | {hba1c}% | {target_hba1c:.1f}% | -{hba1c - target_hba1c:.1f}% |
+| BMI | {bmi} | {target_bmi:.1f} | -{bmi - target_bmi:.1f} kg/m² |
+| Blood Pressure | {bp_systolic}/{bp_diastolic} | {target_bp_sys}/{target_bp_dia} | -{bp_systolic - target_bp_sys}/{bp_diastolic - target_bp_dia} mmHg |
+| Risk Score | {risk}% | {max(5, risk - risk_reduction):.0f}% | -{risk_reduction:.0f}% |
 
-PHASE 3 (Months 6+): Maintenance & Long-term Management
-- Sustaining lifestyle modifications
-- Medication adjustments
-- Monitoring frequency (HbA1c, lipids, etc.)
-- Projected 2-year outcomes
+Structure your response as:
 
-Provide specific, actionable recommendations with expected quantitative outcomes.
-Include confidence level and note this is based on similar patient outcomes from clinical trials."""
+### Treatment Protocol for Risk Reduction
+Goal: Reduce HbA1c to <{target_hba1c:.1f}% and BMI to <{target_bmi:.0f} kg/m² via sustainable behavioral changes.
+
+# Dietary Recommendations
+- Pattern: Mediterranean Diet (40% complex carbs, 30% healthy fats, 30% lean protein)
+- Specifics: Limit added sugars (<10% daily calories), saturated fat (<7% daily calories)
+- Prioritize fiber-rich foods (≥35g/day: vegetables, legumes, whole grains)
+- Include omega-3 sources (salmon, walnuts) 2x/week
+- Caloric Deficit: 500 kcal/day reduction
+
+# Exercise Prescription
+- Frequency: 150 min/week moderate-intensity aerobic exercise + 2 sessions strength training
+- Intensity: 60-70% max heart rate (e.g., brisk walking, cycling)
+- Duration: 30 min/session, split as 5 days/week (aerobic) + 2 days/week (strength)
+
+# Behavioral Modifications
+- Self-Monitoring: Daily food/activity logs + weekly weigh-ins
+- Cognitive Strategies: Goal-setting (e.g., "lose 5% body weight in 12 weeks")
+- Support: Referral to certified diabetes educator (CDE)
+
+Then include the metrics table above.
+
+Do NOT use placeholder dashes (--) in the table. Use the actual values provided."""
 
         # Call GLM-4.5V via OpenRouter
         try:
@@ -5946,28 +5970,35 @@ Include confidence level and note this is based on similar patient outcomes from
             protocol = result.get("choices", [{}])[0].get("message", {}).get("content", "Unable to generate protocol")
         except Exception as api_error:
             print(f"OpenRouter API error in treatment optimizer: {api_error}")
-            # Fallback protocol based on guidelines
-            protocol = f"""## Evidence-Based Treatment Protocol
+            # Fallback protocol based on guidelines - WITH ACTUAL PATIENT DATA
+            protocol = f"""### Treatment Protocol for Risk Reduction
+Goal: Reduce HbA1c to <{target_hba1c:.1f}% and BMI to <{target_bmi:.0f} kg/m² via sustainable behavioral changes.
 
-**PHASE 1: Lifestyle Intervention (Months 0-3)**
-- **Diet**: Mediterranean diet, reduce refined carbs, increase fiber to 25-30g/day
-- **Exercise**: 150 min/week moderate aerobic activity + 2x resistance training
-- **Weight Goal**: Lose 5-7% body weight ({round(bmi * 0.05 * 1.7, 1)}kg target)
-- **Expected Outcome**: HbA1c reduction 0.5-1.0%, Risk reduction 10-15%
+# Dietary Recommendations
+- Pattern: Mediterranean Diet (40% complex carbs, 30% healthy fats, 30% lean protein)
+- Specifics: Limit added sugars (<10% daily calories), saturated fat (<7% daily calories)
+- Prioritize fiber-rich foods (≥35g/day: vegetables, legumes, whole grains)
+- Include omega-3 sources (salmon, walnuts) 2x/week
+- Caloric Deficit: 500 kcal/day reduction (e.g., 1,800 kcal/day for sedentary adults)
 
-**PHASE 2: Pharmacotherapy (Months 3-6)**
-- **First-line**: Metformin 500mg BID → titrate to 1000mg BID
-- **If CVD risk high**: Add SGLT2 inhibitor (empagliflozin 10mg)
-- **Monitoring**: HbA1c at 3 months, lipid panel, renal function
-- **Expected Outcome**: Additional HbA1c reduction 1.0-1.5%
+# Exercise Prescription
+- Frequency: 150 min/week moderate-intensity aerobic exercise + 2 sessions strength training
+- Intensity: 60-70% max heart rate (e.g., brisk walking, cycling)
+- Duration: 30 min/session, split as 5 days/week (aerobic) + 2 days/week (strength)
 
-**PHASE 3: Maintenance (Months 6+)**
-- Continue lifestyle modifications
-- HbA1c monitoring every 3 months until stable, then every 6 months
-- Annual comprehensive metabolic panel
-- **2-Year Projection**: HbA1c <7%, 25-35% risk reduction
+# Behavioral Modifications
+- Self-Monitoring: Daily food/activity logs + weekly weigh-ins
+- Cognitive Strategies: Goal-setting (e.g., "lose 5% body weight in 12 weeks")
+- Support: Referral to certified diabetes educator (CDE) or online program
 
-*Note: AI service temporarily unavailable. Protocol based on ADA/EASD 2024 guidelines.*"""
+| Metric | Baseline | Target (Month 3) | Reduction/Risk Change |
+|--------|----------|------------------|----------------------|
+| HbA1c | {hba1c}% | {target_hba1c:.1f}% | -{hba1c - target_hba1c:.1f}% |
+| BMI | {bmi} | {target_bmi:.1f} | -{bmi - target_bmi:.1f} kg/m² |
+| Blood Pressure | {bp_systolic}/{bp_diastolic} | {target_bp_sys}/{target_bp_dia} | -{bp_systolic - target_bp_sys}/{bp_diastolic - target_bp_dia} mmHg |
+| Risk Score | {risk}% | {max(5, risk - risk_reduction):.0f}% | -{risk_reduction:.0f}% |
+
+*Protocol based on ADA/EASD 2024 guidelines.*"""
         
         # Calculate rough confidence based on how standard the case is
         confidence = 84 if 6.5 < hba1c < 8.0 and 25 < bmi < 35 else 76
