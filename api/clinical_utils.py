@@ -133,31 +133,54 @@ def get_risk_category_score2(risk: float, age: float, disease_id: str) -> RiskCa
 # Older patients: ML can help catch patterns
 # =============================================================================
 
-def get_ml_weight(age: float) -> Tuple[float, float]:
+def get_ml_weight(age: float, disease_id: str = None) -> Tuple[float, float]:
     """
-    Get clinical vs ML weights based on patient age
+    Get clinical vs ML weights based on patient age AND disease type.
     
-    Young patients: Trust validated clinical equations (ML overestimates)
-    Older patients: ML helps catch patterns in complex cases
+    Per-disease weighting based on clinical calculator maturity:
+    - Heart disease: Framingham is gold standard → higher clinical weight
+    - Diabetes: FINDRISC validated → moderate clinical weight  
+    - CKD/NAFLD: Less validated equations → can use more ML
     
     Returns:
         Tuple of (clinical_weight, ml_weight)
     """
+    # Per-disease base weights (clinical_weight, ml_weight)
+    # Based on how validated/mature the clinical calculator is
+    DISEASE_WEIGHTS = {
+        'coronary_heart_disease': (0.80, 0.20),  # Framingham CHD is gold standard
+        'stroke': (0.80, 0.20),                   # Framingham Stroke well-validated
+        'hypertension': (0.75, 0.25),             # Good clinical predictors
+        'heart_failure': (0.75, 0.25),            # Health ABC validated
+        'atrial_fibrillation': (0.75, 0.25),      # CHARGE-AF validated
+        'type2_diabetes': (0.65, 0.35),           # FINDRISC good but ML helps
+        'chronic_kidney_disease': (0.60, 0.40),   # KFRE good, ML adds value
+        'nafld': (0.55, 0.45),                    # FLI less validated, ML helps
+        'copd': (0.70, 0.30),                     # Smoking-based, straightforward
+        'breast_cancer': (0.70, 0.30),            # Gail model validated
+        'colorectal_cancer': (0.65, 0.35),        # Less validated calculators
+        'alzheimers_disease': (0.60, 0.40),       # CAIDE useful but ML adds
+    }
+    
+    # Get base weights for disease (default: 70/30)
+    clinical_base, ml_base = DISEASE_WEIGHTS.get(disease_id, (0.70, 0.30))
+    
+    # Age adjustment: young patients trust clinical more
     if age < 30:
-        # Very young: clinical equations ONLY (ML not validated here)
+        # Very young: clinical only (ML not validated)
         return (1.0, 0.0)
     elif age < 40:
-        # Young adult: minimal ML contribution
-        return (0.95, 0.05)
+        # Young: reduce ML contribution
+        return (min(1.0, clinical_base + 0.15), max(0.0, ml_base - 0.15))
     elif age < 50:
-        # Adult: mostly clinical
-        return (0.85, 0.15)
+        # Adult: slight clinical boost
+        return (min(1.0, clinical_base + 0.05), max(0.0, ml_base - 0.05))
     elif age < 65:
-        # Middle aged: balanced
-        return (0.70, 0.30)
+        # Middle aged: use disease-specific weights as-is
+        return (clinical_base, ml_base)
     else:
-        # Elderly: ML helps more
-        return (0.60, 0.40)
+        # Elderly: ML helps more with complex cases
+        return (max(0.5, clinical_base - 0.10), min(0.5, ml_base + 0.10))
 
 
 # =============================================================================

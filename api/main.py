@@ -3659,12 +3659,17 @@ async def model_info():
         avg_accuracy = sum(accuracies) / len(accuracies)
         avg_auc = sum(aucs) / len(aucs)
         
-        # Per-disease metrics
+        # Per-disease metrics (NOT averaged - each is independent)
         disease_metrics = {
             disease_id: {
                 "accuracy": round(model.metrics['accuracy'] * 100, 1),
                 "auc": round(model.metrics['auc'], 3),
-                "samples": model.metrics.get('samples', 0)
+                "cv_auc_mean": round(model.metrics.get('cv_auc_mean', model.metrics['auc']), 3),
+                "cv_auc_std": round(model.metrics.get('cv_auc_std', 0), 3),
+                "samples": model.metrics.get('samples', 0),
+                "features": len(getattr(model, 'feature_names', [])),
+                "clinical_weight": 0.70,  # Will be adjusted by age
+                "ml_weight": 0.30
             }
             for disease_id, model in real_disease_models.items()
         }
@@ -4167,6 +4172,22 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
     glucose_approx = hba1c_val * 20  # Approximate fasting glucose from HbA1c
     hr_val = get_val('heart_rate', patient.heart_rate)  # Heart rate
     
+    # Training-set MEDIANS for imputation (from UCI/Kaggle datasets)
+    # Using medians instead of zeros to avoid biologically meaningless values
+    TRAINING_MEDIANS = {
+        # UCI Heart Disease medians
+        'cp': 1, 'trestbps': 130, 'chol': 240, 'fbs': 0, 'restecg': 0,
+        'thalach': 150, 'exang': 0, 'oldpeak': 0.8, 'slope': 1, 'ca': 0, 'thal': 2,
+        # CKD dataset medians  
+        'sg': 1.02, 'al': 0, 'su': 0, 'rbc': 1, 'pc': 1, 'pcc': 0, 'ba': 0,
+        'bu': 44, 'sc': 1.2, 'sod': 138, 'pot': 4.4, 'hemo': 12.5, 'pcv': 40,
+        'wbcc': 8000, 'rbcc': 4.7, 'appet': 1, 'pe': 0, 'ane': 0,
+        # Stroke dataset medians
+        'ever_married': 1, 'work_type': 2, 'Residence_type': 1,
+        # General clinical medians
+        'heart_disease': 0, 'cad': 0,
+    }
+    
     def get_model_features(disease_id, model):
         """Create feature DataFrame matching what each model expects"""
         feature_names = getattr(model, 'feature_names', [])
@@ -4181,12 +4202,12 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
             'gender': patient.sex, 'ever_married': 1, 'work_type': 2, 'Residence_type': 1,
             'avg_glucose_level': glucose_approx, 'smoking_status': 1 if smoking_val > 0 else 0,
             # UCI Heart Disease
-            'cp': 0, 'trestbps': patient.bp_systolic, 'chol': total_chol_val, 'fbs': 1 if hba1c_val > 6.5 else 0,
-            'restecg': 0, 'thalach': hr_val, 'exang': 0, 'oldpeak': 0, 'slope': 1, 'ca': 0, 'thal': 2,
+            'cp': 1, 'trestbps': patient.bp_systolic, 'chol': total_chol_val, 'fbs': 1 if hba1c_val > 6.5 else 0,
+            'restecg': 0, 'thalach': hr_val, 'exang': 0, 'oldpeak': 0.8, 'slope': 1, 'ca': 0, 'thal': 2,
             # CKD features
             'bp': patient.bp_systolic, 'sg': 1.02, 'al': 0, 'su': 0, 'rbc': 1, 'pc': 1, 'pcc': 0, 'ba': 0,
-            'bgr': glucose_approx, 'bu': 40, 'sc': 1.0, 'sod': 140, 'pot': 4.5, 'hemo': 14, 'pcv': 42,
-            'wbcc': 8000, 'rbcc': 5, 'htn': 1 if patient.bp_systolic >= 140 else 0,
+            'bgr': glucose_approx, 'bu': 44, 'sc': 1.2, 'sod': 138, 'pot': 4.4, 'hemo': 12.5, 'pcv': 40,
+            'wbcc': 8000, 'rbcc': 4.7, 'htn': 1 if patient.bp_systolic >= 140 else 0,
             'dm': has_diabetes_val, 'cad': 0, 'appet': 1, 'pe': 0, 'ane': 0,
             # Common mappings
             'total_cholesterol': total_chol_val, 'hdl': hdl_val, 'ldl': ldl_val, 'hba1c': hba1c_val,
@@ -4194,8 +4215,8 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
             'on_bp_meds': on_bp_meds_val, 'has_diabetes': has_diabetes_val, 'family_history': 1 if family_hx_val > 0 else 0,
         }
         
-        # Build feature array in the order the model expects
-        features = [feature_map.get(fname, 0) for fname in feature_names]
+        # Build feature array using training-set medians for missing values (NOT zeros)
+        features = [feature_map.get(fname, TRAINING_MEDIANS.get(fname, 0)) for fname in feature_names]
         return pd.DataFrame([features], columns=feature_names)
     
     for disease_id, config in DISEASE_CONFIG.items():
@@ -4223,8 +4244,8 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
             get_recommendations
         )
         
-        # DYNAMIC ML WEIGHTING BY AGE (young patients trust clinical more)
-        clinical_weight, ml_weight = get_ml_weight(patient.age)
+        # DYNAMIC ML WEIGHTING BY AGE AND DISEASE TYPE
+        clinical_weight, ml_weight = get_ml_weight(patient.age, disease_id)
         
         # HYBRID: Age-adjusted weighted combination
         if ml_risk is not None:
@@ -4292,6 +4313,19 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
         # Get top risk factors for this disease
         top_factors = RISK_FACTORS.get(disease_id, RISK_FACTORS["default"])
         
+        # Check if patient already meets DIAGNOSTIC criteria (not risk prediction)
+        diagnostic_threshold_met = False
+        diagnostic_note = None
+        if disease_id == 'type2_diabetes' and hba1c_val >= 6.5:
+            diagnostic_threshold_met = True
+            diagnostic_note = f"HbA1c {hba1c_val}% ≥ 6.5% meets ADA diagnostic criteria"
+        elif disease_id == 'hypertension' and (patient.bp_systolic >= 140 or patient.bp_diastolic >= 90):
+            diagnostic_threshold_met = True
+            diagnostic_note = f"BP {patient.bp_systolic}/{patient.bp_diastolic} mmHg meets hypertension criteria"
+        elif disease_id == 'chronic_kidney_disease' and egfr_val < 60:
+            diagnostic_threshold_met = True
+            diagnostic_note = f"eGFR {egfr_val} mL/min indicates CKD Stage 3+"
+        
         predictions[disease_id] = {
             "disease_id": disease_id,
             "name": config["name"],
@@ -4300,14 +4334,16 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
             "risk_category": category,
             "confidence": confidence,
             "model_type": model_type,
+            "diagnostic_threshold_met": diagnostic_threshold_met,
+            "diagnostic_note": diagnostic_note,
             "top_factors": top_factors,
             "recommendations": recommendations,
             "clinical_data": {
-                "timeframe": clinical_data.get("timeframe", "10-year"),
+                "timeframe": clinical_data.get("timeframe", "10-year") if not diagnostic_threshold_met else "current",
                 "equation": clinical_data.get("equation", "Unknown"),
                 "validated": clinical_data.get("validated", True),
                 "reference": clinical_data.get("reference", ""),
-                "note": clinical_data.get("note", ""),
+                "note": diagnostic_note if diagnostic_threshold_met else clinical_data.get("note", ""),
                 "ml_contribution": round(ml_risk * 100, 1) if ml_risk else None,
                 "age_group": "young" if patient.age < 50 else ("middle" if patient.age < 70 else "elderly"),
                 "calibrated": True
