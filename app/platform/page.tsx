@@ -228,6 +228,15 @@ export default function PlatformPage() {
       return;
     }
     
+    // Set default tab based on role
+    const roleDefaultTabs: Record<string, string> = {
+      doctor: 'predict',
+      nurse: 'audit',
+      admin: 'audit',
+    };
+    const defaultTab = roleDefaultTabs[sessionData.role] || 'audit';
+    setActiveTab(defaultTab as any);
+    
     setSession(sessionData);
 
     // Check if user has consented

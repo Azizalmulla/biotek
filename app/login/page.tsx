@@ -144,7 +144,7 @@ export default function LoginPage() {
       const roleRoutes: Record<string, string> = {
         patient: '/consent',           // Patients → consent → patient-dashboard
         doctor: '/platform',           // Doctors → full platform
-        nurse: '/platform',            // Nurses → platform (limited tabs)
+        nurse: '/nurse',               // Nurses → nursing station (care monitoring)
         researcher: '/researcher',     // Researchers → research portal
         receptionist: '/receptionist', // Receptionists → reception desk
         admin: '/admin',               // Admins → admin dashboard

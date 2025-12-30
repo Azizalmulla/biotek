@@ -5180,15 +5180,40 @@ async def check_llm_status():
 
 # ============ AI Clinical Intelligence Endpoints ============
 
+def check_doctor_only_access(user_role: str, endpoint: str, user_id: str = "unknown"):
+    """Check if user is a doctor and log blocked attempts for non-doctors"""
+    blocked_roles = ['nurse', 'receptionist', 'patient', 'researcher']
+    if user_role.lower() in blocked_roles:
+        log_access_attempt(
+            user_id=user_id,
+            role=user_role,
+            purpose="unauthorized",
+            data_type="doctor_only_endpoint",
+            patient_id=None,
+            granted=False,
+            reason=f"Role '{user_role}' attempted doctor-only endpoint: {endpoint}"
+        )
+        raise HTTPException(
+            status_code=403, 
+            detail=f"Access denied. '{endpoint}' is restricted to doctors only. Your role: {user_role}"
+        )
+    return True
+
+
 @app.post("/ai/predict-progression")
 async def predict_disease_progression(
     request: dict,
-    years: int = 5
+    years: int = 5,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
 ):
     """
     Predict disease progression over time using existing ML model
+    RBAC: Doctors only - nurses/patients cannot access AI predictions
     Shows both natural progression and with intervention
     """
+    check_doctor_only_access(user_role, "/ai/predict-progression", user_id)
+    
     try:
         # Handle nested patient_data from frontend
         patient_data = request.get('patient_data', request)
@@ -5303,11 +5328,17 @@ async def predict_disease_progression(
 
 
 @app.post("/ai/ask")
-async def ai_assistant(request: dict):
+async def ai_assistant(
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
     """
     AI Research Assistant - Answer questions about patient's prediction
-    Includes conversation memory and context
+    RBAC: Doctors only
     """
+    check_doctor_only_access(user_role, "/ai/ask", user_id)
+    
     try:
         question = request.get('question', '')
         prediction_data = request.get('prediction_data', {})
@@ -5416,11 +5447,17 @@ Review the Risk Factor Impact Analysis for prioritized interventions. Consider s
 
 
 @app.post("/ai/clinical-reasoning")
-async def clinical_reasoning(request: dict):
+async def clinical_reasoning(
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
     """
     AI Clinical Reasoning - Deep analysis of patient's clinical picture
-    Provides insights a senior physician would give
+    RBAC: Doctors only - nurses cannot access AI reasoning
     """
+    check_doctor_only_access(user_role, "/ai/clinical-reasoning", user_id)
+    
     try:
         patient = request.get('patient_data', {})
         top_risks = request.get('top_risks', [])
@@ -5804,11 +5841,18 @@ Be specific and clinically actionable. If the variant is not well-characterized,
 
 
 @app.post("/ai/optimize-treatment")
-async def optimize_treatment(request: dict):
+async def optimize_treatment(
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
     """
     Generate AI-optimized treatment protocol
+    RBAC: Doctors only - nurses cannot access treatment optimization
     Based on patient's current state and evidence-based guidelines
     """
+    check_doctor_only_access(user_role, "/ai/optimize-treatment", user_id)
+    
     try:
         # Handle nested patient_data from frontend
         patient_data = request.get('patient_data', request)
@@ -7547,6 +7591,195 @@ async def export_research_data(
         "fields_excluded": ["patient_id", "name", "dob", "address", "doctor_notes"],
         "download_url": f"/research/download/{export_format}",
         "expires_in": "24 hours"
+    }
+
+
+# =============================================================================
+# NURSE ENDPOINTS - Patient Care & Monitoring (Read-Only Clinical Data)
+# =============================================================================
+
+def check_nurse_access(user_role: str, endpoint: str, user_id: str = "unknown"):
+    """Check if nurse has access and log blocked attempts"""
+    if user_role.lower() != 'nurse':
+        log_access_attempt(
+            user_id=user_id,
+            role=user_role,
+            purpose="care",
+            data_type="nurse_endpoint",
+            patient_id=None,
+            granted=False,
+            reason=f"Non-nurse attempted nurse endpoint: {endpoint}"
+        )
+        raise HTTPException(status_code=403, detail=f"Only nurses can access {endpoint}")
+    return True
+
+
+@app.get("/nurse/assigned-patients")
+async def get_nurse_assigned_patients(
+    user_role: str = Header("nurse", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Get list of patients assigned to this nurse"""
+    check_nurse_access(user_role, "assigned-patients", user_id)
+    
+    # Demo data - in production would query by nurse assignment
+    return {
+        "patients": [
+            {"patient_id": "PAT-001", "name": "John Smith", "room": "201A", "status": "stable", "last_vitals": "10 min ago", "alerts": 0},
+            {"patient_id": "PAT-002", "name": "Sarah Johnson", "room": "203B", "status": "monitoring", "last_vitals": "25 min ago", "alerts": 2},
+            {"patient_id": "PAT-003", "name": "Michael Brown", "room": "205A", "status": "critical", "last_vitals": "5 min ago", "alerts": 3},
+            {"patient_id": "PAT-004", "name": "Emily Davis", "room": "207C", "status": "stable", "last_vitals": "1 hr ago", "alerts": 1},
+        ],
+        "total": 4
+    }
+
+
+@app.get("/nurse/patient/{patient_id}/vitals")
+async def get_patient_vitals_for_nurse(
+    patient_id: str,
+    user_role: str = Header("nurse", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Get patient vitals - nurses only (read-only)"""
+    check_nurse_access(user_role, f"vitals/{patient_id}", user_id)
+    
+    log_access_attempt(
+        user_id=user_id,
+        role="nurse",
+        purpose="care",
+        data_type="vitals",
+        patient_id=patient_id,
+        granted=True,
+        reason="Nurse viewed patient vitals"
+    )
+    
+    # Demo vitals data
+    return {
+        "patient_id": patient_id,
+        "vitals": [
+            {"timestamp": datetime.now().isoformat(), "bp_systolic": 128, "bp_diastolic": 82, "heart_rate": 72, "temperature": 98.6, "weight": 175, "respiratory_rate": 16, "oxygen_saturation": 98},
+            {"timestamp": (datetime.now() - timedelta(hours=4)).isoformat(), "bp_systolic": 132, "bp_diastolic": 85, "heart_rate": 78, "temperature": 98.8, "weight": 175, "respiratory_rate": 18, "oxygen_saturation": 97},
+            {"timestamp": (datetime.now() - timedelta(hours=8)).isoformat(), "bp_systolic": 125, "bp_diastolic": 80, "heart_rate": 70, "temperature": 98.4, "weight": 175, "respiratory_rate": 15, "oxygen_saturation": 99},
+        ]
+    }
+
+
+@app.get("/nurse/patient/{patient_id}/labs")
+async def get_patient_labs_for_nurse(
+    patient_id: str,
+    user_role: str = Header("nurse", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Get patient lab results - nurses only (read-only, no interpretation)"""
+    check_nurse_access(user_role, f"labs/{patient_id}", user_id)
+    
+    log_access_attempt(
+        user_id=user_id,
+        role="nurse",
+        purpose="care",
+        data_type="labs",
+        patient_id=patient_id,
+        granted=True,
+        reason="Nurse viewed patient labs"
+    )
+    
+    # Demo lab data - read-only values only
+    return {
+        "patient_id": patient_id,
+        "labs": [
+            {"test_name": "Glucose", "value": "105", "unit": "mg/dL", "reference_range": "70-100", "status": "high", "timestamp": datetime.now().isoformat()},
+            {"test_name": "Hemoglobin", "value": "14.2", "unit": "g/dL", "reference_range": "12-17", "status": "normal", "timestamp": datetime.now().isoformat()},
+            {"test_name": "WBC", "value": "7.5", "unit": "K/uL", "reference_range": "4.5-11", "status": "normal", "timestamp": datetime.now().isoformat()},
+            {"test_name": "Creatinine", "value": "1.1", "unit": "mg/dL", "reference_range": "0.7-1.3", "status": "normal", "timestamp": datetime.now().isoformat()},
+            {"test_name": "Potassium", "value": "5.2", "unit": "mEq/L", "reference_range": "3.5-5.0", "status": "high", "timestamp": datetime.now().isoformat()},
+        ]
+    }
+
+
+@app.get("/nurse/alerts")
+async def get_nurse_alerts(
+    user_role: str = Header("nurse", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Get alerts for nurse's assigned patients"""
+    check_nurse_access(user_role, "alerts", user_id)
+    
+    return {
+        "alerts": [
+            {"id": "ALT-001", "type": "high_risk", "message": "Patient PAT-003 flagged high risk - physician notified", "priority": "high", "timestamp": datetime.now().isoformat(), "acknowledged": False},
+            {"id": "ALT-002", "type": "followup", "message": "Follow-up required for PAT-002 - BP check in 2 hours", "priority": "medium", "timestamp": datetime.now().isoformat(), "acknowledged": False},
+            {"id": "ALT-003", "type": "medication", "message": "PAT-004 medication due at 3:00 PM", "priority": "medium", "timestamp": datetime.now().isoformat(), "acknowledged": True},
+            {"id": "ALT-004", "type": "vitals", "message": "PAT-002 elevated temperature (100.4°F)", "priority": "high", "timestamp": datetime.now().isoformat(), "acknowledged": False},
+        ],
+        "total": 4
+    }
+
+
+@app.get("/nurse/tasks")
+async def get_nurse_tasks(
+    user_role: str = Header("nurse", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Get task checklist for nurse"""
+    check_nurse_access(user_role, "tasks", user_id)
+    
+    return {
+        "tasks": [
+            {"id": "TSK-001", "description": "Check vitals for Room 203B", "due_time": "14:00", "completed": False, "patient_id": "PAT-002"},
+            {"id": "TSK-002", "description": "Administer medication - Room 205A", "due_time": "14:30", "completed": False, "patient_id": "PAT-003"},
+            {"id": "TSK-003", "description": "Wound dressing change - Room 201A", "due_time": "15:00", "completed": False, "patient_id": "PAT-001"},
+            {"id": "TSK-004", "description": "Patient discharge prep - Room 207C", "due_time": "16:00", "completed": True, "patient_id": "PAT-004"},
+        ],
+        "total": 4
+    }
+
+
+@app.get("/nurse/patient/{patient_id}/care-notes")
+async def get_patient_care_notes(
+    patient_id: str,
+    user_role: str = Header("nurse", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Get care notes for patient - nurses can read and write"""
+    check_nurse_access(user_role, f"care-notes/{patient_id}", user_id)
+    
+    return {
+        "patient_id": patient_id,
+        "notes": [
+            {"id": "NOTE-001", "note": "Patient resting comfortably. No complaints of pain.", "created_by": "Nurse Williams", "timestamp": datetime.now().isoformat(), "category": "observation"},
+            {"id": "NOTE-002", "note": "Assisted with ambulation. Tolerated well.", "created_by": "Nurse Johnson", "timestamp": (datetime.now() - timedelta(hours=2)).isoformat(), "category": "task"},
+        ]
+    }
+
+
+@app.post("/nurse/patient/{patient_id}/care-notes")
+async def add_patient_care_note(
+    patient_id: str,
+    note_data: dict,
+    user_role: str = Header("nurse", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Add care note for patient - nurses only (non-diagnostic)"""
+    check_nurse_access(user_role, f"care-notes/{patient_id}", user_id)
+    
+    log_access_attempt(
+        user_id=user_id,
+        role="nurse",
+        purpose="care",
+        data_type="care_notes",
+        patient_id=patient_id,
+        granted=True,
+        reason="Nurse added care note"
+    )
+    
+    import uuid
+    note_id = f"NOTE-{uuid.uuid4().hex[:6].upper()}"
+    
+    return {
+        "status": "created",
+        "note_id": note_id,
+        "patient_id": patient_id,
+        "timestamp": datetime.now().isoformat()
     }
 
 
