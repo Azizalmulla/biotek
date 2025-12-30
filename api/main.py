@@ -4399,12 +4399,25 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
             diagnostic_threshold_met = True
             diagnostic_note = f"eGFR {patient.egfr} mL/min indicates CKD Stage 3+"
         
+        # Determine risk source for clarity
+        if diagnostic_threshold_met:
+            risk_source = "diagnostic_criteria"
+            risk_source_note = "Risk based on clinical diagnostic criteria being met (rule-based)"
+        elif ml_risk is not None:
+            risk_source = "hybrid_model"
+            risk_source_note = "Risk combines validated clinical equations with ML estimate"
+        else:
+            risk_source = "clinical_calculator"
+            risk_source_note = "Risk from validated clinical risk equations only"
+        
         predictions[disease_id] = {
             "disease_id": disease_id,
             "name": config["name"],
             "risk_score": round(risk, 4),
             "risk_percentage": round(risk * 100, 1),
             "risk_category": category,
+            "risk_source": risk_source,
+            "risk_source_note": risk_source_note,
             "confidence": confidence,
             "model_type": model_type,
             "diagnostic_threshold_met": diagnostic_threshold_met,
@@ -4417,7 +4430,8 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
                 "validated": clinical_data.get("validated", True),
                 "reference": clinical_data.get("reference", ""),
                 "note": diagnostic_note if diagnostic_threshold_met else clinical_data.get("note", ""),
-                "ml_contribution": round(ml_risk * 100, 1) if ml_risk is not None else None,
+                "ml_estimate": round(ml_risk * 100, 1) if ml_risk is not None else None,
+                "ml_estimate_note": "Secondary ML prediction for reference only" if diagnostic_threshold_met and ml_risk is not None else None,
                 "age_group": "young" if patient.age < 50 else ("middle" if patient.age < 70 else "elderly"),
                 "calibrated": True
             },
