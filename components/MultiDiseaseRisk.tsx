@@ -693,23 +693,6 @@ export default function MultiDiseaseRisk({
         {/* Optional Data Integrations */}
         <div className="flex gap-3 mb-6">
           <button
-            onClick={() => setShowDNAModal(true)}
-            className={`flex-1 p-3 rounded-xl border-2 border-dashed transition-all hover:scale-[1.02] cursor-pointer ${
-              geneticData ? 'border-green-300 bg-green-50' : 'border-stone-200 hover:border-stone-400 hover:bg-stone-50'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-xl">🧬</span>
-              <div className="text-left">
-                <div className="text-sm font-medium text-black">DNA Analysis</div>
-                <div className="text-xs text-black/50">
-                  {geneticData ? `✓ ${geneticData.sequence_length} bp • ${geneticData.motifs_found} motifs` : 'Click to add genetic risk factors'}
-                </div>
-              </div>
-              {geneticData && <span className="ml-auto text-green-500">✓</span>}
-            </div>
-          </button>
-          <button
             onClick={() => setShowImagingModal(true)}
             className={`flex-1 p-3 rounded-xl border-2 border-dashed transition-all hover:scale-[1.02] cursor-pointer ${
               imagingData ? 'border-green-300 bg-green-50' : 'border-stone-200 hover:border-stone-400 hover:bg-stone-50'
