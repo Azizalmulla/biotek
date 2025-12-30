@@ -4322,9 +4322,9 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
         elif disease_id == 'hypertension' and (patient.bp_systolic >= 140 or patient.bp_diastolic >= 90):
             diagnostic_threshold_met = True
             diagnostic_note = f"BP {patient.bp_systolic}/{patient.bp_diastolic} mmHg meets hypertension criteria"
-        elif disease_id == 'chronic_kidney_disease' and egfr_val < 60:
+        elif disease_id == 'chronic_kidney_disease' and (patient.egfr or 90) < 60:
             diagnostic_threshold_met = True
-            diagnostic_note = f"eGFR {egfr_val} mL/min indicates CKD Stage 3+"
+            diagnostic_note = f"eGFR {patient.egfr} mL/min indicates CKD Stage 3+"
         
         predictions[disease_id] = {
             "disease_id": disease_id,
