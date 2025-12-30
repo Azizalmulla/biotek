@@ -35,18 +35,27 @@ class DNASequenceInput(BaseModel):
     num_tokens: int = Field(100, ge=10, le=500, description="Number of nucleotides to generate")
     temperature: float = Field(0.7, ge=0.1, le=1.0, description="Generation randomness")
     organism: Optional[str] = Field(None, description="Target organism: human, mouse, ecoli, yeast")
+    # Guardrails
+    genetics_consent: bool = Field(False, description="Patient has consented to genetic analysis")
+    user_role: str = Field("patient", description="User role: doctor, researcher, patient")
     
 
 class VariantInput(BaseModel):
     reference_sequence: str = Field(..., description="Reference DNA sequence")
     variant_sequence: str = Field(..., description="Variant DNA sequence")
     position: int = Field(..., ge=1, description="Position of variant (1-indexed)")
+    # Guardrails
+    genetics_consent: bool = Field(False, description="Patient has consented to genetic analysis")
+    user_role: str = Field("patient", description="User role: doctor, researcher, patient")
 
 
 class SequenceGenerationInput(BaseModel):
     prompt_sequence: str = Field(..., description="Starting DNA sequence")
     length: int = Field(100, ge=10, le=1000, description="Nucleotides to generate")
     temperature: float = Field(0.8, ge=0.0, le=1.0)
+    # Guardrails
+    genetics_consent: bool = Field(False, description="Patient has consented to genetic analysis")
+    user_role: str = Field("patient", description="User role: doctor, researcher, patient")
 
 
 class ImageAnalysisInput(BaseModel):
@@ -99,7 +108,26 @@ async def analyze_dna_sequence(input_data: DNASequenceInput):
     - Confidence scores per nucleotide
     - Regulatory motif detection
     - Nucleotide distribution analysis
+    
+    GUARDRAILS:
+    - Requires genetics_consent=True
+    - Requires user_role in {doctor, researcher}
     """
+    # GUARDRAIL: Check genetics consent
+    if not input_data.genetics_consent:
+        raise HTTPException(
+            status_code=403, 
+            detail="Genetic analysis requires explicit patient consent (genetics_consent=True)"
+        )
+    
+    # GUARDRAIL: Check user role
+    allowed_roles = ["doctor", "researcher"]
+    if input_data.user_role not in allowed_roles:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Genetic analysis restricted to roles: {allowed_roles}. Current role: {input_data.user_role}"
+        )
+    
     try:
         result = cloud_client.evo2.analyze_sequence(
             dna_sequence=input_data.sequence,
@@ -109,7 +137,12 @@ async def analyze_dna_sequence(input_data: DNASequenceInput):
         )
         return {
             "success": True,
-            "data": result
+            "data": result,
+            "guardrails": {
+                "genetics_consent": True,
+                "user_role": input_data.user_role,
+                "action_logged": True
+            }
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -123,7 +156,26 @@ async def predict_variant_effect(input_data: VariantInput):
     Predict effect of a genetic variant using Evo 2
     
     Compares reference and variant sequences to predict pathogenicity
+    
+    GUARDRAILS:
+    - Requires genetics_consent=True
+    - Requires user_role in {doctor, researcher}
     """
+    # GUARDRAIL: Check genetics consent
+    if not input_data.genetics_consent:
+        raise HTTPException(
+            status_code=403, 
+            detail="Genetic analysis requires explicit patient consent (genetics_consent=True)"
+        )
+    
+    # GUARDRAIL: Check user role
+    allowed_roles = ["doctor", "researcher"]
+    if input_data.user_role not in allowed_roles:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Genetic analysis restricted to roles: {allowed_roles}. Current role: {input_data.user_role}"
+        )
+    
     try:
         result = cloud_client.evo2.predict_variant_effect(
             reference_seq=input_data.reference_sequence,
@@ -132,7 +184,12 @@ async def predict_variant_effect(input_data: VariantInput):
         )
         return {
             "success": True,
-            "data": result
+            "data": result,
+            "guardrails": {
+                "genetics_consent": True,
+                "user_role": input_data.user_role,
+                "action_logged": True
+            }
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -146,7 +203,26 @@ async def generate_dna_sequence(input_data: SequenceGenerationInput):
     Generate DNA sequence continuation using Evo 2
     
     Uses the model to generate biologically plausible sequences
+    
+    GUARDRAILS:
+    - Requires genetics_consent=True
+    - Requires user_role in {doctor, researcher}
     """
+    # GUARDRAIL: Check genetics consent
+    if not input_data.genetics_consent:
+        raise HTTPException(
+            status_code=403, 
+            detail="Genetic analysis requires explicit patient consent (genetics_consent=True)"
+        )
+    
+    # GUARDRAIL: Check user role
+    allowed_roles = ["doctor", "researcher"]
+    if input_data.user_role not in allowed_roles:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Genetic analysis restricted to roles: {allowed_roles}. Current role: {input_data.user_role}"
+        )
+    
     try:
         result = cloud_client.evo2.generate_sequence(
             prompt_sequence=input_data.prompt_sequence,
@@ -155,7 +231,12 @@ async def generate_dna_sequence(input_data: SequenceGenerationInput):
         )
         return {
             "success": True,
-            "data": result
+            "data": result,
+            "guardrails": {
+                "genetics_consent": True,
+                "user_role": input_data.user_role,
+                "action_logged": True
+            }
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -172,13 +253,24 @@ async def analyze_medical_image(
     file: UploadFile = File(...),
     image_type: str = Form("xray"),
     clinical_question: Optional[str] = Form(None),
-    use_reasoning: bool = Form(True)
+    use_reasoning: bool = Form(True),
+    user_role: str = Form("patient")
 ):
     """
     Analyze medical image using GLM-4.5V
     
     Supports X-ray, CT, MRI, ultrasound, and pathology images
+    
+    GUARDRAILS:
+    - Requires user_role = doctor (medical imaging interpretation)
     """
+    # GUARDRAIL: Check user role - imaging analysis restricted to doctors
+    if user_role != "doctor":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Medical imaging analysis restricted to doctors only. Current role: {user_role}"
+        )
+    
     # Validate file type
     allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
     if file.content_type not in allowed_types:

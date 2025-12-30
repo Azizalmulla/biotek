@@ -4328,25 +4328,72 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
             raw_risk = clinical_risk
             model_type = clinical_data.get("equation", "Clinical Calculator")
         
-        # Apply PRS modifier (genetic risk)
-        prs_modifier = 0.0
-        if disease_id in ['type2_diabetes', 'nafld', 'chronic_kidney_disease'] and patient.prs_metabolic:
-            prs_modifier = patient.prs_metabolic * 0.1  # PRS affects risk by up to ±10%
-        elif disease_id in ['coronary_heart_disease', 'hypertension', 'stroke', 'heart_failure', 'atrial_fibrillation'] and patient.prs_cardiovascular:
-            prs_modifier = patient.prs_cardiovascular * 0.1
-        elif disease_id in ['breast_cancer', 'colorectal_cancer'] and patient.prs_cancer:
-            prs_modifier = patient.prs_cancer * 0.1
-        elif disease_id == 'alzheimers_disease' and patient.prs_neurological:
-            prs_modifier = patient.prs_neurological * 0.1
+        # =============================================================================
+        # SECONDARY SIGNALS: DNA/PRS and Imaging (DO NOT modify final risk score)
+        # =============================================================================
+        # 
+        # CURRENT STATUS (v2.0):
+        #   - DNA (PRS) and Imaging are DISPLAY-ONLY signals
+        #   - They do NOT affect the final risk percentage
+        #   - Final risk = clinical equations + unified ML model only
+        #
+        # WHY NOT INTEGRATED:
+        #   - PRS effect sizes from GWAS are population-specific
+        #   - Imaging biomarkers need validated cutoffs per modality
+        #   - Hand-tuned multipliers are clinically indefensible
+        #
+        # FUTURE INTEGRATION REQUIREMENTS:
+        #   1. Calibrate PRS using real outcome data (hazard ratios from longitudinal studies)
+        #   2. Validate imaging biomarkers against pathology/outcomes
+        #   3. Use Platt scaling or isotonic regression per signal type
+        #   4. Report calibration metrics: Brier score, ECE, calibration curves
+        #   5. Document data sources and effect size derivations
+        #
+        # DO NOT add hand-tuned multipliers like "prs * 0.1" without proper validation
+        # =============================================================================
         
-        raw_risk = min(0.95, max(0.01, raw_risk + prs_modifier))
+        # Compute PRS signal (for display only - does NOT affect final risk)
+        prs_signal = {"status": "not_provided", "direction": "neutral", "summary": None, "value": None}
+        prs_value = None
+        if disease_id in ['type2_diabetes', 'nafld', 'chronic_kidney_disease']:
+            prs_value = patient.prs_metabolic
+        elif disease_id in ['coronary_heart_disease', 'hypertension', 'stroke', 'heart_failure', 'atrial_fibrillation']:
+            prs_value = patient.prs_cardiovascular
+        elif disease_id in ['breast_cancer', 'colorectal_cancer']:
+            prs_value = patient.prs_cancer
+        elif disease_id == 'alzheimers_disease':
+            prs_value = patient.prs_neurological
         
-        # Apply imaging risk modifier
-        if patient.imaging_risk_modifier and patient.imaging_risk_modifier > 0:
-            # Imaging findings boost risk for relevant diseases
-            if disease_id in ['nafld', 'coronary_heart_disease', 'heart_failure']:
-                raw_risk = min(0.95, raw_risk + patient.imaging_risk_modifier)
-                model_type += " + Imaging"
+        if prs_value is not None:
+            prs_signal["status"] = "provided"
+            prs_signal["value"] = round(prs_value, 3)
+            if prs_value > 0.1:
+                prs_signal["direction"] = "increased_risk"
+                prs_signal["summary"] = "Genetic factors suggest elevated risk"
+            elif prs_value < -0.1:
+                prs_signal["direction"] = "decreased_risk"
+                prs_signal["summary"] = "Genetic factors suggest reduced risk"
+            else:
+                prs_signal["direction"] = "neutral"
+                prs_signal["summary"] = "Genetic factors within average range"
+        
+        # Compute imaging signal (for display only - does NOT affect final risk)
+        imaging_signal = {"status": "not_provided", "direction": "neutral", "summary": None, "value": None}
+        if patient.imaging_risk_modifier is not None and disease_id in ['nafld', 'coronary_heart_disease', 'heart_failure']:
+            imaging_signal["status"] = "provided"
+            imaging_signal["value"] = round(patient.imaging_risk_modifier, 3)
+            if patient.imaging_risk_modifier > 0.15:
+                imaging_signal["direction"] = "increased_risk"
+                imaging_signal["summary"] = "Imaging findings suggest elevated risk"
+            elif patient.imaging_risk_modifier > 0:
+                imaging_signal["direction"] = "slightly_increased"
+                imaging_signal["summary"] = "Imaging findings suggest mildly elevated risk"
+            else:
+                imaging_signal["direction"] = "neutral"
+                imaging_signal["summary"] = "No concerning imaging findings"
+        
+        # NOTE: raw_risk is NOT modified by PRS or imaging in this version
+        # This keeps the final probability clinically defensible and calibrated
         
         # Patient data for sanity checks (includes sex and smoking for proper constraints)
         patient_check_data = {
@@ -4410,6 +4457,26 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
             risk_source = "clinical_calculator"
             risk_source_note = "Risk from validated clinical risk equations only"
         
+        # Build secondary signals object (genetics + imaging for clinician context)
+        secondary_signals = {
+            "genetics": prs_signal,
+            "imaging": imaging_signal,
+            "disclaimer": "Genetic and imaging insights are shown for clinical context. They do not change the final risk score in this version."
+        }
+        
+        # Check if any secondary signal suggests increased risk
+        has_elevated_secondary = (
+            prs_signal["direction"] == "increased_risk" or 
+            imaging_signal["direction"] in ["increased_risk", "slightly_increased"]
+        )
+        
+        # Notes for clinician based on secondary signals
+        clinician_notes = []
+        if prs_signal["status"] == "provided" and prs_signal["direction"] == "increased_risk":
+            clinician_notes.append(f"Genetic risk factors detected for {config['name']}")
+        if imaging_signal["status"] == "provided" and imaging_signal["direction"] != "neutral":
+            clinician_notes.append(f"Imaging findings relevant to {config['name']}")
+        
         predictions[disease_id] = {
             "disease_id": disease_id,
             "name": config["name"],
@@ -4435,6 +4502,9 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
                 "age_group": "young" if patient.age < 50 else ("middle" if patient.age < 70 else "elderly"),
                 "calibrated": True
             },
+            "secondary_signals": secondary_signals,
+            "has_elevated_secondary_signals": has_elevated_secondary,
+            "clinician_notes": clinician_notes if clinician_notes else None,
             "confidence_warnings": conf_warnings if conf_warnings else None
         }
     
