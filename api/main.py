@@ -1424,6 +1424,57 @@ async def run_migrations(
         return {"status": "error", "error": str(e)}
 
 
+@app.get("/debug/db-info")
+async def debug_db_info():
+    """
+    TEMPORARY: Debug endpoint to verify database configuration.
+    Returns db type, version, and connection status.
+    """
+    from database import USE_POSTGRES, DATABASE_URL, get_db_connection, get_db_cursor
+    
+    info = {
+        "db_type": "postgresql" if USE_POSTGRES else "sqlite",
+        "DATABASE_URL_present": bool(DATABASE_URL),
+        "USE_POSTGRES": USE_POSTGRES,
+    }
+    
+    try:
+        with get_db_connection() as conn:
+            with get_db_cursor(conn) as cursor:
+                if USE_POSTGRES:
+                    cursor.execute("SELECT version()")
+                    version_result = cursor.fetchone()
+                    info["db_version"] = version_result[0] if version_result else "unknown"
+                    info["engine"] = "psycopg2"
+                else:
+                    cursor.execute("SELECT sqlite_version()")
+                    version_result = cursor.fetchone()
+                    info["db_version"] = version_result[0] if version_result else "unknown"
+                    info["engine"] = "sqlite3"
+                    info["sqlite_file"] = "biotek_local.db"
+                
+                # Count records in key tables
+                tables_to_check = [
+                    "patient_prediction_results",
+                    "encounters", 
+                    "encounter_predictions",
+                    "patient_treatments"
+                ]
+                info["table_counts"] = {}
+                for table in tables_to_check:
+                    try:
+                        cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                        count = cursor.fetchone()
+                        info["table_counts"][table] = count[0] if count else 0
+                    except Exception as e:
+                        info["table_counts"][table] = f"error: {str(e)[:50]}"
+                        
+    except Exception as e:
+        info["connection_error"] = str(e)
+    
+    return info
+
+
 @app.get("/admin/db-info")
 async def get_db_info_endpoint(
     admin_key: str = Header(None, alias="X-Admin-Key")
