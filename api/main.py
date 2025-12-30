@@ -4286,6 +4286,17 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
                 
                 all_predictions = unified_disease_model.predict_proba(unified_features)
                 ml_risk = all_predictions.get(disease_id)
+                
+                # Model-specific calibration for poorly-performing models
+                # Scale predictions based on model quality (AUC) and expected prevalence
+                MODEL_CALIBRATION = {
+                    'chronic_kidney_disease': 0.15,  # CKD prevalence ~15%, model overpredicts
+                    'nafld': 0.25,                   # NAFLD prevalence ~25%, weak AUC (0.6)
+                    'heart_failure': 0.5,            # Model tends to overpredict
+                }
+                if disease_id in MODEL_CALIBRATION and ml_risk is not None:
+                    calibration_factor = MODEL_CALIBRATION[disease_id]
+                    ml_risk = ml_risk * calibration_factor
             except Exception as e:
                 print(f"Unified model error for {disease_id}: {e}")
         
