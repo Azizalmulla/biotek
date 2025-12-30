@@ -266,6 +266,14 @@ export default function MultiDiseaseRisk({
         imaging_risk_modifier: imagingRiskModifier,
       };
 
+      // DETERMINISM LOGGING: Log payload hash for debugging
+      const payloadHash = JSON.stringify(requestData).split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      console.log('[DETERMINISM] Request payload hash:', Math.abs(payloadHash));
+      console.log('[DETERMINISM] Full payload:', JSON.stringify(requestData, null, 2));
+
       const response = await fetch(`${API_BASE}/predict/multi-disease`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -277,6 +285,13 @@ export default function MultiDiseaseRisk({
       }
 
       const data = await response.json();
+      
+      // DETERMINISM LOGGING: Log response hash for debugging
+      const responseHash = JSON.stringify(data.predictions || {}).split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      console.log('[DETERMINISM] Response predictions hash:', Math.abs(responseHash));
       
       // Add multi-modal analysis info AND input data to result
       const enhancedData = {
@@ -329,9 +344,31 @@ export default function MultiDiseaseRisk({
     }
   };
 
+  // Deterministic hash function for consistent mock data
+  const hashInputs = (inputs: typeof formData): number => {
+    const str = JSON.stringify(inputs);
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
+  };
+
+  // Seeded random number generator for deterministic results
+  const seededRandom = (seed: number, index: number): number => {
+    const x = Math.sin(seed + index * 9999) * 10000;
+    return x - Math.floor(x);
+  };
+
   const generateMockResult = (): PredictionResult => {
     const diseases = Object.keys(DISEASE_ICONS);
     const predictions: Record<string, DiseaseRisk> = {};
+    
+    // DETERMINISTIC: Use hash of inputs as seed
+    const inputHash = hashInputs(formData);
+    console.log('[DETERMINISM] Input hash for mock data:', inputHash);
     
     // Disease-specific risk bands for clinically sound mock data
     const MOCK_RISK_BANDS: Record<string, { elevated: number; moderate: number; low: number }> = {
@@ -349,8 +386,9 @@ export default function MultiDiseaseRisk({
       alzheimers_disease: { elevated: 0.15, moderate: 0.08, low: 0.04 },
     };
     
-    diseases.forEach(id => {
-      const risk = Math.random() * 0.4 + 0.02; // 2-42% range
+    diseases.forEach((id, idx) => {
+      // DETERMINISTIC: Use seeded random based on input hash + disease index
+      const risk = seededRandom(inputHash, idx) * 0.4 + 0.02; // 2-42% range
       const bands = MOCK_RISK_BANDS[id] || { elevated: 0.20, moderate: 0.10, low: 0.05 };
       
       // Check if diagnostic criteria might be met based on form data
@@ -407,7 +445,8 @@ export default function MultiDiseaseRisk({
         severity_label,
         diagnostic_note,
         risk_category: legacyMap[severity_label] || 'MODERATE',
-        confidence: 0.85 + Math.random() * 0.1,
+        // DETERMINISTIC: Use seeded random for confidence too
+        confidence: 0.85 + seededRandom(inputHash, idx + 100) * 0.1,
         top_factors: [
           { feature: 'age', importance: 0.25, value: formData.age },
           { feature: 'bmi', importance: 0.18, value: formData.bmi },
@@ -508,10 +547,12 @@ export default function MultiDiseaseRisk({
       }
     } catch (err) {
       // Use mock data for demo
+      // DETERMINISTIC: motifs based on sequence length hash
+      const seqHash = dnaSequence.length % 5 + 1;
       setGeneticData({
         dna_analyzed: true,
         sequence_length: dnaSequence.length,
-        motifs_found: Math.floor(Math.random() * 5) + 1,
+        motifs_found: seqHash,
       });
       setShowDNAModal(false);
     } finally {
@@ -545,10 +586,11 @@ export default function MultiDiseaseRisk({
         setTimeout(() => setShowSuccessToast(false), 3000);
       } else {
         // API returned error status - use demo data
+        // DETERMINISTIC: Use fixed abnormality count (1) for consistency
         console.log('Imaging API returned non-OK status, using demo data');
         setImagingData({
           images_analyzed: 1,
-          abnormalities: Math.floor(Math.random() * 3) + 1,
+          abnormalities: 1,  // Fixed value for determinism
         });
         setShowImagingModal(false);
         setShowSuccessToast(true);
@@ -556,10 +598,11 @@ export default function MultiDiseaseRisk({
       }
     } catch (err) {
       // Network error or other exception - use mock data for demo
+      // DETERMINISTIC: Use fixed abnormality count (1) for consistency
       console.log('Imaging API error, using demo data:', err);
       setImagingData({
         images_analyzed: 1,
-        abnormalities: Math.floor(Math.random() * 3) + 1,
+        abnormalities: 1,  // Fixed value for determinism
       });
       setShowImagingModal(false);
       setShowSuccessToast(true);

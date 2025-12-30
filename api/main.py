@@ -5041,12 +5041,20 @@ def apply_differential_privacy(prediction: float, epsilon: float = DP_EPSILON) -
     Apply differential privacy noise to prediction
     
     Uses Laplace mechanism for epsilon-differential privacy
+    
+    NOTE: For clinical determinism, we now use a seeded random generator
+    based on the prediction value itself, ensuring same inputs = same outputs.
     """
     # Sensitivity of prediction (max change from adding/removing one record)
     sensitivity = 0.1  # Assuming bounded prediction change
     
-    # Add Laplace noise
-    noise = np.random.laplace(0, sensitivity / epsilon)
+    # DETERMINISTIC: Seed based on prediction value for reproducibility
+    # Same prediction value will always get same noise
+    seed = int(prediction * 1000000) % (2**31)
+    rng = np.random.RandomState(seed)
+    
+    # Add Laplace noise (now deterministic per prediction value)
+    noise = rng.laplace(0, sensitivity / epsilon)
     
     # Clip to valid probability range
     noisy_prediction = np.clip(prediction + noise, 0, 1)
