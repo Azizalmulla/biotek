@@ -156,6 +156,20 @@ export default function VariantAnalyzer({ patientId, onResultSaved }: VariantAna
 
   return (
     <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8 border border-black/10">
+      {/* Clinical Disclaimer Banner */}
+      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+        <div className="flex items-start gap-3">
+          <span className="text-xl">ℹ️</span>
+          <div>
+            <p className="text-sm font-medium text-blue-900">Clinical Decision Support</p>
+            <p className="text-xs text-blue-700 mt-1">
+              Genetic insights are shown for clinical context. They do <strong>not</strong> change the final disease risk scores. 
+              Results should be interpreted by a qualified healthcare provider.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
@@ -163,13 +177,13 @@ export default function VariantAnalyzer({ patientId, onResultSaved }: VariantAna
             <span className="text-2xl">🧬</span>
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-black">Variant Pathogenicity Analyzer</h2>
-            <p className="text-sm text-black/60">Powered by Evo 2 • 40B parameter genomic foundation model</p>
+            <h2 className="text-2xl font-bold text-black">Genetic Variant Pathogenicity Analyzer</h2>
+            <p className="text-sm text-black/60">ACMG/AMP Classification • Clinical Decision Support</p>
           </div>
         </div>
         <div className="text-right text-xs text-black/40">
-          <div>Powered by</div>
-          <div className="font-bold text-black/60">NVIDIA NIM</div>
+          <div>Hospital-Grade</div>
+          <div className="font-bold text-black/60">Genetic Report</div>
         </div>
       </div>
 

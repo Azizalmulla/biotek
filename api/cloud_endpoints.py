@@ -30,33 +30,9 @@ cloud_client = BioTekCloudClient()
 # PYDANTIC MODELS
 # =============================================================================
 
-class DNASequenceInput(BaseModel):
-    sequence: str = Field(..., description="DNA sequence (ACGT only)")
-    num_tokens: int = Field(100, ge=10, le=500, description="Number of nucleotides to generate")
-    temperature: float = Field(0.7, ge=0.1, le=1.0, description="Generation randomness")
-    organism: Optional[str] = Field(None, description="Target organism: human, mouse, ecoli, yeast")
-    # Guardrails
-    genetics_consent: bool = Field(False, description="Patient has consented to genetic analysis")
-    user_role: str = Field("patient", description="User role: doctor, researcher, patient")
-    
-
-class VariantInput(BaseModel):
-    reference_sequence: str = Field(..., description="Reference DNA sequence")
-    variant_sequence: str = Field(..., description="Variant DNA sequence")
-    position: int = Field(..., ge=1, description="Position of variant (1-indexed)")
-    # Guardrails
-    genetics_consent: bool = Field(False, description="Patient has consented to genetic analysis")
-    user_role: str = Field("patient", description="User role: doctor, researcher, patient")
-
-
-class SequenceGenerationInput(BaseModel):
-    prompt_sequence: str = Field(..., description="Starting DNA sequence")
-    length: int = Field(100, ge=10, le=1000, description="Nucleotides to generate")
-    temperature: float = Field(0.8, ge=0.0, le=1.0)
-    # Guardrails
-    genetics_consent: bool = Field(False, description="Patient has consented to genetic analysis")
-    user_role: str = Field("patient", description="User role: doctor, researcher, patient")
-
+# NOTE: Raw DNA sequence analysis (Evo-style ACGT input) has been REMOVED.
+# Use the /ai/analyze-variant endpoint in main.py for clinical variant interpretation.
+# That endpoint accepts HGVS notation, rsID, or gene+variant (e.g., BRCA1 c.5266dupC).
 
 class ImageAnalysisInput(BaseModel):
     image_type: str = Field("xray", description="Type: xray, ct, mri, ultrasound, pathology")
@@ -94,154 +70,25 @@ async def get_setup_instructions():
 
 
 # =============================================================================
-# EVO 2 ENDPOINTS (DNA Analysis)
+# DNA ANALYSIS ENDPOINTS - REMOVED
 # =============================================================================
-
-@router.post("/dna/analyze")
-async def analyze_dna_sequence(input_data: DNASequenceInput):
-    """
-    Analyze DNA sequence using Evo 2 (40B)
-    
-    Features:
-    - Sequence generation/continuation
-    - Organism-specific bias (human, mouse, ecoli, yeast)
-    - Confidence scores per nucleotide
-    - Regulatory motif detection
-    - Nucleotide distribution analysis
-    
-    GUARDRAILS:
-    - Requires genetics_consent=True
-    - Requires user_role in {doctor, researcher}
-    """
-    # GUARDRAIL: Check genetics consent
-    if not input_data.genetics_consent:
-        raise HTTPException(
-            status_code=403, 
-            detail="Genetic analysis requires explicit patient consent (genetics_consent=True)"
-        )
-    
-    # GUARDRAIL: Check user role
-    allowed_roles = ["doctor", "researcher"]
-    if input_data.user_role not in allowed_roles:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Genetic analysis restricted to roles: {allowed_roles}. Current role: {input_data.user_role}"
-        )
-    
-    try:
-        result = cloud_client.evo2.analyze_sequence(
-            dna_sequence=input_data.sequence,
-            num_tokens=input_data.num_tokens,
-            temperature=input_data.temperature,
-            organism=input_data.organism
-        )
-        return {
-            "success": True,
-            "data": result,
-            "guardrails": {
-                "genetics_consent": True,
-                "user_role": input_data.user_role,
-                "action_logged": True
-            }
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Evo 2 API error: {str(e)}")
-
-
-@router.post("/dna/variant-effect")
-async def predict_variant_effect(input_data: VariantInput):
-    """
-    Predict effect of a genetic variant using Evo 2
-    
-    Compares reference and variant sequences to predict pathogenicity
-    
-    GUARDRAILS:
-    - Requires genetics_consent=True
-    - Requires user_role in {doctor, researcher}
-    """
-    # GUARDRAIL: Check genetics consent
-    if not input_data.genetics_consent:
-        raise HTTPException(
-            status_code=403, 
-            detail="Genetic analysis requires explicit patient consent (genetics_consent=True)"
-        )
-    
-    # GUARDRAIL: Check user role
-    allowed_roles = ["doctor", "researcher"]
-    if input_data.user_role not in allowed_roles:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Genetic analysis restricted to roles: {allowed_roles}. Current role: {input_data.user_role}"
-        )
-    
-    try:
-        result = cloud_client.evo2.predict_variant_effect(
-            reference_seq=input_data.reference_sequence,
-            variant_seq=input_data.variant_sequence,
-            position=input_data.position
-        )
-        return {
-            "success": True,
-            "data": result,
-            "guardrails": {
-                "genetics_consent": True,
-                "user_role": input_data.user_role,
-                "action_logged": True
-            }
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Evo 2 API error: {str(e)}")
-
-
-@router.post("/dna/generate")
-async def generate_dna_sequence(input_data: SequenceGenerationInput):
-    """
-    Generate DNA sequence continuation using Evo 2
-    
-    Uses the model to generate biologically plausible sequences
-    
-    GUARDRAILS:
-    - Requires genetics_consent=True
-    - Requires user_role in {doctor, researcher}
-    """
-    # GUARDRAIL: Check genetics consent
-    if not input_data.genetics_consent:
-        raise HTTPException(
-            status_code=403, 
-            detail="Genetic analysis requires explicit patient consent (genetics_consent=True)"
-        )
-    
-    # GUARDRAIL: Check user role
-    allowed_roles = ["doctor", "researcher"]
-    if input_data.user_role not in allowed_roles:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Genetic analysis restricted to roles: {allowed_roles}. Current role: {input_data.user_role}"
-        )
-    
-    try:
-        result = cloud_client.evo2.generate_sequence(
-            prompt_sequence=input_data.prompt_sequence,
-            length=input_data.length,
-            temperature=input_data.temperature
-        )
-        return {
-            "success": True,
-            "data": result,
-            "guardrails": {
-                "genetics_consent": True,
-                "user_role": input_data.user_role,
-                "action_logged": True
-            }
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Evo 2 API error: {str(e)}")
+# Raw DNA sequence analysis (Evo-style ACGT input) has been intentionally removed.
+# 
+# REASON: Raw sequence analysis is research tooling, not clinical-grade.
+# 
+# REPLACEMENT: Use /ai/analyze-variant endpoint for clinical genetics.
+# It accepts:
+#   - HGVS notation (e.g., "BRCA1 c.5266dupC")
+#   - rsID (e.g., "rs334")
+#   - Gene + variant (e.g., "APOE ε4/ε4")
+#   - CYP nomenclature (e.g., "CYP2D6 *4/*4")
+#
+# The variant analyzer provides hospital-grade output:
+#   - ACMG/AMP classification (Pathogenic → Benign)
+#   - Clinical significance summary
+#   - Actionable recommendations
+#   - Pharmacogenomics implications
+# =============================================================================
 
 
 # =============================================================================

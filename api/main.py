@@ -5431,8 +5431,22 @@ The interconnection between elevated blood pressure, dyslipidemia, and insulin r
 @app.post("/ai/analyze-variant")
 async def analyze_variant(request: dict):
     """
-    Variant Pathogenicity Analyzer - Uses Evo 2 concepts for clinical genetics
-    Interprets genetic variants and provides clinical guidance
+    Clinical Genetic Variant Pathogenicity Analyzer
+    
+    Accepts:
+    - HGVS notation (e.g., "BRCA1 c.5266dupC")
+    - rsID (e.g., "rs334")  
+    - Gene + variant (e.g., "APOE ε4/ε4")
+    - CYP nomenclature (e.g., "CYP2D6 *4/*4")
+    
+    Returns hospital-grade genetic report with:
+    - ACMG/AMP classification (Pathogenic → Benign)
+    - Clinical significance summary
+    - Actionable recommendations
+    - Pharmacogenomics implications
+    
+    NOTE: This is DECISION SUPPORT only. Results do NOT modify disease risk scores.
+    Genetics appear as secondary signals for clinician context.
     """
     try:
         variant = request.get('variant', '')
@@ -5626,7 +5640,47 @@ Be specific and clinically actionable. If the variant is not well-characterized,
             reason=f"Variant analysis: {variant}"
         )
         
-        return result
+        # Determine actionability level
+        classification = result.get('classification', 'VUS')
+        if classification in ['PATHOGENIC', 'LIKELY_PATHOGENIC']:
+            actionability = 'HIGH'
+            actionability_note = 'Clinical action recommended based on variant classification'
+        elif classification == 'VUS':
+            actionability = 'LOW'
+            actionability_note = 'Insufficient evidence for clinical action - monitor for reclassification'
+        else:
+            actionability = 'NONE'
+            actionability_note = 'No clinical action indicated'
+        
+        # Wrap in hospital-grade response format
+        return {
+            # Core variant data
+            **result,
+            
+            # Hospital-grade additions
+            'report_type': 'GENETIC_VARIANT_ANALYSIS',
+            'report_version': '2.0',
+            'actionability': actionability,
+            'actionability_note': actionability_note,
+            
+            # Clinical summary for quick review
+            'clinical_summary': {
+                'variant_id': result.get('variant', variant),
+                'gene': result.get('gene', gene or 'Unknown'),
+                'classification': classification,
+                'confidence': result.get('confidence', 0.5),
+                'clinical_significance': result.get('clinical_significance', '')[:200] + '...' if len(result.get('clinical_significance', '')) > 200 else result.get('clinical_significance', ''),
+                'primary_conditions': result.get('associated_conditions', [])[:3],
+                'actionability': actionability
+            },
+            
+            # Disclaimer for clinical use
+            'disclaimer': {
+                'text': 'This genetic analysis is provided for clinical decision support only. It does NOT modify disease risk predictions. Results should be interpreted by a qualified healthcare provider in conjunction with clinical findings, family history, and other relevant information.',
+                'risk_modification': False,
+                'intended_use': 'decision_support'
+            }
+        }
             
     except Exception as e:
         return {
