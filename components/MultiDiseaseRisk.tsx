@@ -205,6 +205,7 @@ export default function MultiDiseaseRisk({
   const [imagingFile, setImagingFile] = useState<File | null>(null);
   const [imagingAnalyzing, setImagingAnalyzing] = useState(false);
   const [imagingPreview, setImagingPreview] = useState<string | null>(null);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   const handleInputChange = (field: string, value: number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -450,6 +451,8 @@ export default function MultiDiseaseRisk({
         abnormalities: Math.floor(Math.random() * 3),
       });
       setShowImagingModal(false);
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
     } finally {
       setImagingAnalyzing(false);
     }
@@ -1173,6 +1176,24 @@ export default function MultiDiseaseRisk({
                 </div>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Success Toast */}
+      <AnimatePresence>
+        {showSuccessToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-8 right-8 bg-green-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-50"
+          >
+            <span className="text-2xl">✓</span>
+            <div>
+              <div className="font-semibold">Imaging Analysis Complete</div>
+              <div className="text-sm text-green-100">Medical imaging data added successfully</div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
