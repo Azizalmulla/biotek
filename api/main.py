@@ -4160,25 +4160,43 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
     ]
     
     # Use pre-loaded REAL disease models (trained on UCI/Kaggle patient data)
-    # These are loaded at startup in load_model() function
     ml_models = real_disease_models.copy() if real_disease_models else {}
     
-    # Create feature vector - 13 optimal clinical features (with imputed values)
-    ml_features = pd.DataFrame([[
-        patient.age,
-        patient.sex,
-        patient.bmi,
-        patient.bp_systolic,
-        patient.bp_diastolic,
-        on_bp_meds_val,
-        total_chol_val,
-        hdl_val,
-        ldl_val,
-        hba1c_val,
-        has_diabetes_val,
-        1 if smoking_val > 0 else 0,
-        1 if family_hx_val > 0 else 0
-    ]], columns=COMMON_FEATURES)
+    # Feature mapping for each model (maps patient data to model's expected features)
+    def get_model_features(disease_id, model):
+        """Create feature DataFrame matching what each model expects"""
+        feature_names = getattr(model, 'feature_names', [])
+        
+        # Map patient data to each model's expected features
+        feature_map = {
+            # Type 2 Diabetes (Kaggle dataset)
+            'sex': patient.sex, 'age': patient.age, 'hypertension': 1 if patient.bp_systolic >= 140 else 0,
+            'heart_disease': 0, 'smoking': 1 if smoking_val > 0 else 0, 'bmi': patient.bmi,
+            'HbA1c_level': hba1c_val, 'blood_glucose_level': fasting_glucose_val * 18 if fasting_glucose_val < 20 else fasting_glucose_val,
+            # Stroke dataset
+            'gender': patient.sex, 'ever_married': 1, 'work_type': 2, 'Residence_type': 1,
+            'avg_glucose_level': fasting_glucose_val * 18 if fasting_glucose_val < 20 else fasting_glucose_val,
+            'smoking_status': 1 if smoking_val > 0 else 0,
+            # UCI Heart Disease
+            'cp': 0, 'trestbps': patient.bp_systolic, 'chol': total_chol_val, 'fbs': 1 if fasting_glucose_val > 7 else 0,
+            'restecg': 0, 'thalach': heart_rate_val, 'exang': 0, 'oldpeak': 0, 'slope': 1, 'ca': 0, 'thal': 2,
+            # CKD features
+            'bp': patient.bp_systolic, 'sg': 1.02, 'al': 0, 'su': 0, 'rbc': 1, 'pc': 1, 'pcc': 0, 'ba': 0,
+            'bgr': fasting_glucose_val * 18 if fasting_glucose_val < 20 else fasting_glucose_val,
+            'bu': 40, 'sc': 1.0, 'sod': 140, 'pot': 4.5, 'hemo': 14, 'pcv': 42, 'wbcc': 8000, 'rbcc': 5,
+            'htn': 1 if patient.bp_systolic >= 140 else 0, 'dm': has_diabetes_val, 'cad': 0, 'appet': 1, 'pe': 0, 'ane': 0,
+            # Common mappings
+            'total_cholesterol': total_chol_val, 'hdl': hdl_val, 'ldl': ldl_val, 'hba1c': hba1c_val,
+            'bp_systolic': patient.bp_systolic, 'bp_diastolic': patient.bp_diastolic,
+            'on_bp_meds': on_bp_meds_val, 'has_diabetes': has_diabetes_val, 'family_history': 1 if family_hx_val > 0 else 0,
+        }
+        
+        # Build feature array in the order the model expects
+        features = []
+        for fname in feature_names:
+            features.append(feature_map.get(fname, 0))
+        
+        return pd.DataFrame([features], columns=feature_names)
     
     for disease_id, config in DISEASE_CONFIG.items():
         # Get clinical risk from validated equations (60% weight)
@@ -4190,13 +4208,11 @@ async def predict_multi_disease(patient: MultiDiseaseInput):
         if disease_id in ml_models:
             try:
                 model_data = ml_models[disease_id]
+                # Create feature vector matching this model's expected features
+                model_features = get_model_features(disease_id, model_data)
                 # RealDiseaseModel has predict_proba method that handles ensemble
                 if hasattr(model_data, 'predict_proba'):
-                    ml_risk = float(model_data.predict_proba(ml_features)[0])
-                # Handle dict format (resaved models)
-                elif isinstance(model_data, dict) and 'xgb_model' in model_data:
-                    xgb = model_data['xgb_model']
-                    ml_risk = float(xgb.predict_proba(ml_features)[0][1])
+                    ml_risk = float(model_data.predict_proba(model_features)[0])
             except Exception as e:
                 print(f"ML prediction error for {disease_id}: {e}")
                 ml_risk = None
