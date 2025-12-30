@@ -779,12 +779,15 @@ def init_database():
         )
     """)
     
-    # Patient prediction results - stores last prediction for quick loading
+    # Patient prediction results - stores predictions with visibility control
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patient_prediction_results (
             patient_id TEXT PRIMARY KEY,
             updated_at TEXT NOT NULL,
-            prediction_json TEXT NOT NULL
+            created_by TEXT,
+            visibility TEXT DEFAULT 'patient_visible',
+            prediction_json TEXT NOT NULL,
+            patient_summary_json TEXT
         )
     """)
     
@@ -6570,34 +6573,80 @@ async def get_patient_data_audit(
 
 # ============ Patient Prediction Results Storage (PostgreSQL/SQLite) ============
 
+def create_patient_safe_summary(prediction_data: dict) -> dict:
+    """
+    Create a patient-safe summary from full prediction data.
+    Removes: ML weights, calibration data, clinician notes, debug info.
+    Keeps: Risk percentages, categories, recommendations, top factors.
+    """
+    if not prediction_data:
+        return {}
+    
+    patient_summary = {
+        "timestamp": prediction_data.get("timestamp"),
+        "summary": prediction_data.get("summary"),
+        "predictions": {}
+    }
+    
+    # Sanitize each disease prediction
+    for disease_id, pred in prediction_data.get("predictions", {}).items():
+        patient_summary["predictions"][disease_id] = {
+            "disease_id": pred.get("disease_id"),
+            "name": pred.get("name"),
+            "risk_percentage": pred.get("risk_percentage"),
+            "risk_category": pred.get("risk_category"),
+            "diagnostic_threshold_met": pred.get("diagnostic_threshold_met"),
+            "diagnostic_note": pred.get("diagnostic_note"),
+            "top_factors": pred.get("top_factors", [])[:3],  # Limit to top 3
+            "recommendations": pred.get("recommendations", {}),
+            # Exclude: ml_estimate, confidence, model_type, clinical_data internals
+        }
+    
+    return patient_summary
+
+
 @app.post("/patient/{patient_id}/prediction-results")
 async def save_patient_prediction_results(
     patient_id: str,
     prediction_data: dict,
     user_id: str = Header(None, alias="X-User-ID"),
-    user_role: str = Header(None, alias="X-User-Role")
+    user_role: str = Header(None, alias="X-User-Role"),
+    visibility: str = "patient_visible"
 ):
-    """Save prediction results for a patient for later retrieval"""
+    """Save prediction results for a patient with visibility control"""
     try:
         ph = get_placeholder()
         prediction_json = json.dumps(prediction_data)
         
+        # Create patient-safe summary (no ML weights, no clinician notes)
+        patient_summary = create_patient_safe_summary(prediction_data)
+        patient_summary_json = json.dumps(patient_summary)
+        
+        created_by = user_id or "unknown"
+        
         # PostgreSQL uses ON CONFLICT, SQLite uses INSERT OR REPLACE
         if USE_POSTGRES:
             query = f"""
-                INSERT INTO patient_prediction_results (patient_id, updated_at, prediction_json)
-                VALUES ({ph}, {ph}, {ph})
-                ON CONFLICT (patient_id) DO UPDATE SET updated_at = EXCLUDED.updated_at, prediction_json = EXCLUDED.prediction_json
+                INSERT INTO patient_prediction_results 
+                (patient_id, updated_at, created_by, visibility, prediction_json, patient_summary_json)
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                ON CONFLICT (patient_id) DO UPDATE SET 
+                    updated_at = EXCLUDED.updated_at, 
+                    created_by = EXCLUDED.created_by,
+                    visibility = EXCLUDED.visibility,
+                    prediction_json = EXCLUDED.prediction_json,
+                    patient_summary_json = EXCLUDED.patient_summary_json
             """
         else:
             query = f"""
-                INSERT OR REPLACE INTO patient_prediction_results (patient_id, updated_at, prediction_json)
-                VALUES ({ph}, {ph}, {ph})
+                INSERT OR REPLACE INTO patient_prediction_results 
+                (patient_id, updated_at, created_by, visibility, prediction_json, patient_summary_json)
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
             """
         
-        execute_query(query, (patient_id, datetime.now().isoformat(), prediction_json))
+        execute_query(query, (patient_id, datetime.now().isoformat(), created_by, visibility, prediction_json, patient_summary_json))
         
-        return {"status": "saved", "patient_id": patient_id}
+        return {"status": "saved", "patient_id": patient_id, "visibility": visibility}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save prediction: {str(e)}")
@@ -6609,27 +6658,67 @@ async def get_patient_prediction_results(
     user_id: str = Header(None, alias="X-User-ID"),
     user_role: str = Header(None, alias="X-User-Role")
 ):
-    """Load saved prediction results for a patient"""
+    """
+    Load saved prediction results for a patient.
+    
+    Access rules:
+    - Patient: Can only access their own data (patient_id == user_id) 
+               Returns patient_summary_json (sanitized, no ML internals)
+    - Doctor/Researcher: Can access any patient's full prediction_json
+    """
     try:
-        # ENFORCE ACCESS CONTROL - blocks unauthorized access
-        enforce_access_control(
-            user_id=user_id,
-            user_role=user_role,
-            purpose="treatment",
-            data_type="patient_predictions",
-            patient_id=patient_id
-        )
+        # ROLE-BASED ACCESS CONTROL
+        is_patient = user_role == "patient"
+        is_own_data = user_id == patient_id
+        
+        # Patients can ONLY access their own data
+        if is_patient and not is_own_data:
+            raise HTTPException(
+                status_code=403, 
+                detail="Patients can only access their own prediction results"
+            )
         
         ph = get_placeholder()
-        query = f"SELECT prediction_json, updated_at FROM patient_prediction_results WHERE patient_id = {ph}"
+        query = f"""
+            SELECT prediction_json, patient_summary_json, updated_at, visibility, created_by 
+            FROM patient_prediction_results 
+            WHERE patient_id = {ph}
+        """
         row = execute_query(query, (patient_id,), fetch='one')
         
         if row:
+            prediction_json, patient_summary_json, updated_at, visibility, created_by = row
+            
+            # Patient role: return sanitized summary only (if visible)
+            if is_patient:
+                if visibility != "patient_visible":
+                    return {
+                        "found": True,
+                        "patient_id": patient_id,
+                        "prediction": None,
+                        "message": "Results are currently doctor-only. Please contact your healthcare provider.",
+                        "updated_at": updated_at
+                    }
+                
+                # Return patient-safe summary
+                return {
+                    "found": True,
+                    "patient_id": patient_id,
+                    "prediction": json.loads(patient_summary_json) if patient_summary_json else None,
+                    "updated_at": updated_at,
+                    "view_type": "patient_summary",
+                    "note": "This is a simplified view of your results. Contact your doctor for detailed analysis."
+                }
+            
+            # Doctor/Researcher: return full prediction data
             return {
                 "found": True,
                 "patient_id": patient_id,
-                "prediction": json.loads(row[0]),
-                "updated_at": row[1]
+                "prediction": json.loads(prediction_json),
+                "updated_at": updated_at,
+                "created_by": created_by,
+                "visibility": visibility,
+                "view_type": "full_clinical"
             }
         else:
             return {
@@ -6638,6 +6727,8 @@ async def get_patient_prediction_results(
                 "prediction": None
             }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load prediction: {str(e)}")
 

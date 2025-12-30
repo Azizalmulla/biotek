@@ -49,29 +49,42 @@ export default function PatientDashboard() {
       setConsent(JSON.parse(storedConsent));
     }
 
-    // Load my predictions
+    // Load my predictions from the correct endpoint (not audit logs!)
     try {
-      const response = await fetch(`${API_BASE}/audit/logs?limit=50`);
+      const response = await fetch(`${API_BASE}/patient/${patientId}/prediction-results`, {
+        headers: {
+          'X-User-ID': patientId,
+          'X-User-Role': 'patient'
+        }
+      });
       const data = await response.json();
       
-      // Filter to only this patient's predictions
-      const myData = data.filter((log: any) => 
-        log.patient_id && log.patient_id.includes(patientId)
-      );
-      setMyPredictions(myData);
+      if (data.found && data.prediction) {
+        // Convert prediction data to array format for display
+        const predictions = data.prediction.predictions || {};
+        const predictionArray = Object.values(predictions).map((pred: any) => ({
+          ...pred,
+          timestamp: data.updated_at,
+          patient_id: patientId
+        }));
+        setMyPredictions(predictionArray);
+      } else {
+        setMyPredictions([]);
+      }
     } catch (error) {
       console.error('Failed to load predictions:', error);
+      setMyPredictions([]);
     }
 
-    // Load who accessed my data
+    // Load who accessed my data (audit log is correct for this)
     try {
       const response = await fetch(`${API_BASE}/audit/access-log?limit=50`);
       const data = await response.json();
       
       // Filter to accesses related to this patient
-      const myAccess = data.access_logs.filter((log: any) => 
+      const myAccess = data.access_logs?.filter((log: any) => 
         log.patient_id && log.patient_id.includes(patientId)
-      );
+      ) || [];
       setAccessLog(myAccess);
     } catch (error) {
       console.error('Failed to load access log:', error);
