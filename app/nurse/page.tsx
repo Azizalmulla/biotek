@@ -324,18 +324,18 @@ export default function NurseDashboard() {
   const pendingTasks = tasks.filter(t => !t.completed).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-blue-50">
+    <div className="min-h-screen" style={{ backgroundColor: '#f3e7d9' }}>
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-teal-200 sticky top-0 z-50">
+      <header className="bg-white/60 backdrop-blur-md border-b border-black/10 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-teal-500 rounded-xl flex items-center justify-center text-white font-bold">
+              <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-bold">
                 B
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">Nursing Station</h1>
-                <p className="text-sm text-gray-500">Patient Care & Monitoring</p>
+                <h1 className="text-xl font-semibold text-black">Nursing Station</h1>
+                <p className="text-sm text-black/50">Patient Care & Monitoring</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -344,12 +344,12 @@ export default function NurseDashboard() {
                   {unacknowledgedAlerts} Active Alerts
                 </span>
               )}
-              <span className="px-3 py-1 bg-teal-100 text-teal-800 rounded-full text-sm font-medium">
+              <span className="px-3 py-1 bg-black/5 text-black rounded-full text-sm font-medium">
                 👩‍⚕️ {session.fullName || 'Nurse'}
               </span>
               <button
                 onClick={handleSignOut}
-                className="px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                className="bg-black text-white px-4 py-2 rounded-full text-sm hover:bg-black/90 transition-all"
               >
                 Sign Out
               </button>
@@ -359,31 +359,31 @@ export default function NurseDashboard() {
       </header>
 
       {/* Stats Bar */}
-      <div className="bg-white/60 border-b border-teal-100">
+      <div className="bg-white/60 border-b border-black/10">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="grid grid-cols-4 gap-6">
             <div className="text-center">
-              <p className="text-2xl font-bold text-teal-600">{patients.length}</p>
-              <p className="text-sm text-gray-500">Assigned Patients</p>
+              <p className="text-2xl font-bold text-black">{patients.length}</p>
+              <p className="text-sm text-black/50">Assigned Patients</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-red-600">{patients.filter(p => p.status === 'critical').length}</p>
-              <p className="text-sm text-gray-500">Critical</p>
+              <p className="text-sm text-black/50">Critical</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-amber-600">{unacknowledgedAlerts}</p>
-              <p className="text-sm text-gray-500">Active Alerts</p>
+              <p className="text-sm text-black/50">Active Alerts</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-blue-600">{pendingTasks}</p>
-              <p className="text-sm text-gray-500">Pending Tasks</p>
+              <p className="text-2xl font-bold text-black">{pendingTasks}</p>
+              <p className="text-sm text-black/50">Pending Tasks</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Tab Navigation */}
-      <div className="border-b border-teal-100 bg-white/40">
+      <div className="border-b border-black/10 bg-white/40 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex gap-8">
             {[
@@ -398,8 +398,8 @@ export default function NurseDashboard() {
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`flex items-center gap-2 px-4 py-4 border-b-2 transition-all ${
                   activeTab === tab.id
-                    ? 'border-teal-500 text-teal-700 font-medium'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-black text-black font-medium'
+                    : 'border-transparent text-black/50 hover:text-black/70'
                 }`}
               >
                 <span>{tab.icon}</span>
@@ -415,17 +415,17 @@ export default function NurseDashboard() {
         <div className="grid grid-cols-3 gap-6">
           {/* Patient List Sidebar */}
           <div className="col-span-1">
-            <div className="bg-white rounded-2xl shadow-sm border border-teal-100 overflow-hidden">
-              <div className="p-4 bg-teal-50 border-b border-teal-100">
-                <h3 className="font-semibold text-teal-800">Assigned Patients</h3>
+            <div className="bg-white rounded-2xl shadow-sm border border-black/10 overflow-hidden">
+              <div className="p-4 bg-black/5 border-b border-black/10">
+                <h3 className="font-semibold text-black">Assigned Patients</h3>
               </div>
-              <div className="divide-y divide-teal-50 max-h-[600px] overflow-y-auto">
+              <div className="divide-y divide-black/5 max-h-[600px] overflow-y-auto">
                 {patients.map((patient) => (
                   <button
                     key={patient.patient_id}
                     onClick={() => selectPatient(patient)}
-                    className={`w-full p-4 text-left hover:bg-teal-50 transition-colors ${
-                      selectedPatient?.patient_id === patient.patient_id ? 'bg-teal-50' : ''
+                    className={`w-full p-4 text-left hover:bg-black/5 transition-colors ${
+                      selectedPatient?.patient_id === patient.patient_id ? 'bg-black/5' : ''
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -444,7 +444,7 @@ export default function NurseDashboard() {
                         )}
                       </div>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">Last vitals: {patient.last_vitals}</p>
+                    <p className="text-xs text-black/40 mt-1">Last vitals: {patient.last_vitals}</p>
                   </button>
                 ))}
               </div>
@@ -464,11 +464,11 @@ export default function NurseDashboard() {
                   className="space-y-6"
                 >
                   {/* Patient Header */}
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-teal-100">
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-black/10">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h2 className="text-2xl font-bold text-gray-900">{selectedPatient.name}</h2>
-                        <p className="text-gray-500">Room {selectedPatient.room} • ID: {selectedPatient.patient_id}</p>
+                        <h2 className="text-2xl font-bold text-black">{selectedPatient.name}</h2>
+                        <p className="text-black/50">Room {selectedPatient.room} • ID: {selectedPatient.patient_id}</p>
                       </div>
                       <span className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(selectedPatient.status)}`}>
                         {selectedPatient.status.toUpperCase()}
@@ -478,32 +478,32 @@ export default function NurseDashboard() {
 
                   {/* Quick Vitals */}
                   {vitals.length > 0 && (
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-teal-100">
-                      <h3 className="font-semibold text-gray-900 mb-4">Latest Vitals</h3>
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-black/10">
+                      <h3 className="font-semibold text-black mb-4">Latest Vitals</h3>
                       <div className="grid grid-cols-4 gap-4">
-                        <div className="text-center p-4 bg-red-50 rounded-xl">
-                          <p className="text-2xl font-bold text-red-600">{vitals[0].bp_systolic}/{vitals[0].bp_diastolic}</p>
-                          <p className="text-sm text-gray-500">Blood Pressure</p>
+                        <div className="text-center p-4 bg-black/5 rounded-xl">
+                          <p className="text-2xl font-bold text-black">{vitals[0].bp_systolic}/{vitals[0].bp_diastolic}</p>
+                          <p className="text-sm text-black/50">Blood Pressure</p>
                         </div>
-                        <div className="text-center p-4 bg-pink-50 rounded-xl">
-                          <p className="text-2xl font-bold text-pink-600">{vitals[0].heart_rate}</p>
-                          <p className="text-sm text-gray-500">Heart Rate</p>
+                        <div className="text-center p-4 bg-black/5 rounded-xl">
+                          <p className="text-2xl font-bold text-black">{vitals[0].heart_rate}</p>
+                          <p className="text-sm text-black/50">Heart Rate</p>
                         </div>
-                        <div className="text-center p-4 bg-amber-50 rounded-xl">
-                          <p className="text-2xl font-bold text-amber-600">{vitals[0].temperature}°F</p>
-                          <p className="text-sm text-gray-500">Temperature</p>
+                        <div className="text-center p-4 bg-black/5 rounded-xl">
+                          <p className="text-2xl font-bold text-black">{vitals[0].temperature}°F</p>
+                          <p className="text-sm text-black/50">Temperature</p>
                         </div>
-                        <div className="text-center p-4 bg-blue-50 rounded-xl">
-                          <p className="text-2xl font-bold text-blue-600">{vitals[0].oxygen_saturation}%</p>
-                          <p className="text-sm text-gray-500">O2 Saturation</p>
+                        <div className="text-center p-4 bg-black/5 rounded-xl">
+                          <p className="text-2xl font-bold text-black">{vitals[0].oxygen_saturation}%</p>
+                          <p className="text-sm text-black/50">O2 Saturation</p>
                         </div>
                       </div>
                     </div>
                   )}
 
                   {/* Care Notes */}
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-teal-100">
-                    <h3 className="font-semibold text-gray-900 mb-4">Care Notes</h3>
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-black/10">
+                    <h3 className="font-semibold text-black mb-4">Care Notes</h3>
                     
                     {/* Add Note */}
                     <div className="flex gap-3 mb-4">
@@ -512,12 +512,12 @@ export default function NurseDashboard() {
                         value={newNote}
                         onChange={(e) => setNewNote(e.target.value)}
                         placeholder="Add observation or note..."
-                        className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="flex-1 px-4 py-2 border border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20"
                         onKeyDown={(e) => e.key === 'Enter' && addCareNote()}
                       />
                       <button
                         onClick={addCareNote}
-                        className="px-4 py-2 bg-teal-500 text-white rounded-xl hover:bg-teal-600"
+                        className="px-4 py-2 bg-black text-white rounded-xl hover:bg-black/90"
                       >
                         Add Note
                       </button>
@@ -526,9 +526,9 @@ export default function NurseDashboard() {
                     {/* Notes List */}
                     <div className="space-y-3 max-h-48 overflow-y-auto">
                       {careNotes.map((note) => (
-                        <div key={note.id} className="p-3 bg-gray-50 rounded-xl">
-                          <p className="text-gray-800">{note.note}</p>
-                          <p className="text-xs text-gray-400 mt-1">
+                        <div key={note.id} className="p-3 bg-black/5 rounded-xl">
+                          <p className="text-black">{note.note}</p>
+                          <p className="text-xs text-black/40 mt-1">
                             {note.created_by} • {new Date(note.timestamp).toLocaleString()}
                           </p>
                         </div>
@@ -542,10 +542,10 @@ export default function NurseDashboard() {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="bg-white rounded-2xl p-12 text-center shadow-sm border border-teal-100"
+                  className="bg-white rounded-2xl p-12 text-center shadow-sm border border-black/10"
                 >
                   <p className="text-5xl mb-4">👈</p>
-                  <p className="text-gray-500">Select a patient to view details</p>
+                  <p className="text-black/50">Select a patient to view details</p>
                 </motion.div>
               )}
 
@@ -555,30 +555,30 @@ export default function NurseDashboard() {
                   key="vitals"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-2xl p-6 shadow-sm border border-teal-100"
+                  className="bg-white rounded-2xl p-6 shadow-sm border border-black/10"
                 >
-                  <h3 className="font-semibold text-gray-900 mb-4">Vitals History - {selectedPatient.name}</h3>
+                  <h3 className="font-semibold text-black mb-4">Vitals History - {selectedPatient.name}</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead className="bg-teal-50">
+                      <thead className="bg-black/5">
                         <tr>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Time</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">BP</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">HR</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Temp</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">RR</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">O2</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black">Time</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black">BP</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black">HR</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black">Temp</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black">RR</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black">O2</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-teal-50">
+                      <tbody className="divide-y divide-black/5">
                         {vitals.map((v, i) => (
-                          <tr key={i} className="hover:bg-teal-50/50">
-                            <td className="px-4 py-3 text-gray-600">{new Date(v.timestamp).toLocaleTimeString()}</td>
-                            <td className="px-4 py-3 font-medium">{v.bp_systolic}/{v.bp_diastolic}</td>
-                            <td className="px-4 py-3">{v.heart_rate} bpm</td>
-                            <td className="px-4 py-3">{v.temperature}°F</td>
-                            <td className="px-4 py-3">{v.respiratory_rate}/min</td>
-                            <td className="px-4 py-3">{v.oxygen_saturation}%</td>
+                          <tr key={i} className="hover:bg-black/5">
+                            <td className="px-4 py-3 text-black/60">{new Date(v.timestamp).toLocaleTimeString()}</td>
+                            <td className="px-4 py-3 font-medium text-black">{v.bp_systolic}/{v.bp_diastolic}</td>
+                            <td className="px-4 py-3 text-black">{v.heart_rate} bpm</td>
+                            <td className="px-4 py-3 text-black">{v.temperature}°F</td>
+                            <td className="px-4 py-3 text-black">{v.respiratory_rate}/min</td>
+                            <td className="px-4 py-3 text-black">{v.oxygen_saturation}%</td>
                           </tr>
                         ))}
                       </tbody>
@@ -593,22 +593,22 @@ export default function NurseDashboard() {
                   key="labs"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-2xl p-6 shadow-sm border border-teal-100"
+                  className="bg-white rounded-2xl p-6 shadow-sm border border-black/10"
                 >
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-gray-900">Lab Results - {selectedPatient.name}</h3>
-                    <span className="text-sm text-gray-500">Read-only view</span>
+                    <h3 className="font-semibold text-black">Lab Results - {selectedPatient.name}</h3>
+                    <span className="text-sm text-black/50">Read-only view</span>
                   </div>
                   <div className="space-y-3">
                     {labs.map((lab, i) => (
                       <div key={i} className={`p-4 rounded-xl flex items-center justify-between ${
                         lab.status === 'critical' ? 'bg-red-50 border border-red-200' :
                         lab.status === 'high' || lab.status === 'low' ? 'bg-amber-50 border border-amber-200' :
-                        'bg-gray-50'
+                        'bg-black/5'
                       }`}>
                         <div>
-                          <p className="font-medium text-gray-900">{lab.test_name}</p>
-                          <p className="text-sm text-gray-500">Ref: {lab.reference_range} {lab.unit}</p>
+                          <p className="font-medium text-black">{lab.test_name}</p>
+                          <p className="text-sm text-black/50">Ref: {lab.reference_range} {lab.unit}</p>
                         </div>
                         <div className="text-right">
                           <p className={`text-xl font-bold ${
@@ -643,20 +643,20 @@ export default function NurseDashboard() {
                 >
                   {alerts.filter(a => !a.acknowledged).length > 0 && (
                     <div className="space-y-3">
-                      <h3 className="font-semibold text-gray-900">Active Alerts</h3>
+                      <h3 className="font-semibold text-black">Active Alerts</h3>
                       {alerts.filter(a => !a.acknowledged).map((alert) => (
                         <div key={alert.id} className={`p-4 rounded-xl border-l-4 ${getPriorityColor(alert.priority)}`}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <span className="text-2xl">{getAlertIcon(alert.type)}</span>
                               <div>
-                                <p className="font-medium text-gray-900">{alert.message}</p>
-                                <p className="text-sm text-gray-500">{new Date(alert.timestamp).toLocaleString()}</p>
+                                <p className="font-medium text-black">{alert.message}</p>
+                                <p className="text-sm text-black/50">{new Date(alert.timestamp).toLocaleString()}</p>
                               </div>
                             </div>
                             <button
                               onClick={() => acknowledgeAlert(alert.id)}
-                              className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 text-sm"
+                              className="px-4 py-2 bg-white border border-black/10 rounded-lg hover:bg-black/5 text-sm"
                             >
                               Acknowledge
                             </button>
@@ -668,14 +668,14 @@ export default function NurseDashboard() {
 
                   {alerts.filter(a => a.acknowledged).length > 0 && (
                     <div className="space-y-3 mt-6">
-                      <h3 className="font-semibold text-gray-500">Acknowledged</h3>
+                      <h3 className="font-semibold text-black/50">Acknowledged</h3>
                       {alerts.filter(a => a.acknowledged).map((alert) => (
-                        <div key={alert.id} className="p-4 rounded-xl bg-gray-50 opacity-60">
+                        <div key={alert.id} className="p-4 rounded-xl bg-black/5 opacity-60">
                           <div className="flex items-center gap-3">
                             <span className="text-2xl">{getAlertIcon(alert.type)}</span>
                             <div>
-                              <p className="text-gray-600">{alert.message}</p>
-                              <p className="text-sm text-gray-400">{new Date(alert.timestamp).toLocaleString()}</p>
+                              <p className="text-black/60">{alert.message}</p>
+                              <p className="text-sm text-black/40">{new Date(alert.timestamp).toLocaleString()}</p>
                             </div>
                           </div>
                         </div>
@@ -691,15 +691,15 @@ export default function NurseDashboard() {
                   key="tasks"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-2xl p-6 shadow-sm border border-teal-100"
+                  className="bg-white rounded-2xl p-6 shadow-sm border border-black/10"
                 >
-                  <h3 className="font-semibold text-gray-900 mb-4">Task Checklist</h3>
+                  <h3 className="font-semibold text-black mb-4">Task Checklist</h3>
                   <div className="space-y-3">
                     {tasks.map((task) => (
                       <div 
                         key={task.id} 
                         className={`p-4 rounded-xl flex items-center justify-between ${
-                          task.completed ? 'bg-green-50' : 'bg-gray-50'
+                          task.completed ? 'bg-green-50' : 'bg-black/5'
                         }`}
                       >
                         <div className="flex items-center gap-4">
@@ -708,19 +708,19 @@ export default function NurseDashboard() {
                             className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
                               task.completed 
                                 ? 'bg-green-500 border-green-500 text-white' 
-                                : 'border-gray-300 hover:border-teal-500'
+                                : 'border-black/30 hover:border-black'
                             }`}
                           >
                             {task.completed && '✓'}
                           </button>
                           <div>
-                            <p className={`font-medium ${task.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                            <p className={`font-medium ${task.completed ? 'text-black/40 line-through' : 'text-black'}`}>
                               {task.description}
                             </p>
-                            <p className="text-sm text-gray-500">Due: {task.due_time}</p>
+                            <p className="text-sm text-black/50">Due: {task.due_time}</p>
                           </div>
                         </div>
-                        <span className="text-sm text-gray-400">{task.patient_id}</span>
+                        <span className="text-sm text-black/40">{task.patient_id}</span>
                       </div>
                     ))}
                   </div>
@@ -732,10 +732,10 @@ export default function NurseDashboard() {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="bg-white rounded-2xl p-12 text-center shadow-sm border border-teal-100"
+                  className="bg-white rounded-2xl p-12 text-center shadow-sm border border-black/10"
                 >
                   <p className="text-5xl mb-4">👈</p>
-                  <p className="text-gray-500">Select a patient to view {activeTab}</p>
+                  <p className="text-black/50">Select a patient to view {activeTab}</p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -744,7 +744,7 @@ export default function NurseDashboard() {
       </div>
 
       {/* Access Restriction Notice */}
-      <div className="fixed bottom-4 right-4 bg-teal-600 text-white px-4 py-2 rounded-lg text-sm shadow-lg">
+      <div className="fixed bottom-4 right-4 bg-black text-white px-4 py-2 rounded-lg text-sm shadow-lg">
         🔒 Care monitoring only • No prediction or diagnostic access
       </div>
     </div>
