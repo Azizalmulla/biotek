@@ -801,8 +801,12 @@ def init_database():
         for table, column, col_type in migration_columns:
             try:
                 cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}")
-            except Exception:
-                pass  # Column already exists
+                conn.commit()
+                print(f"✓ Added column {column} to {table}")
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate column" not in str(e).lower():
+                    print(f"Migration warning for {table}.{column}: {e}")
     
     # Patient variant analysis results
     cursor.execute("""
