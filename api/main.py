@@ -791,6 +791,19 @@ def init_database():
         )
     """)
     
+    # Migration: Add new columns to existing PostgreSQL tables
+    if USE_POSTGRES:
+        migration_columns = [
+            ("patient_prediction_results", "created_by", "TEXT"),
+            ("patient_prediction_results", "visibility", "TEXT DEFAULT 'patient_visible'"),
+            ("patient_prediction_results", "patient_summary_json", "TEXT"),
+        ]
+        for table, column, col_type in migration_columns:
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}")
+            except Exception:
+                pass  # Column already exists
+    
     # Patient variant analysis results
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patient_variant_results (
