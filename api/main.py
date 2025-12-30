@@ -444,15 +444,18 @@ async def load_model():
     print(f"✓ Loaded {len(real_disease_models)}/12 real disease models")
     
     # Load UNIFIED model (new architecture - single model for all diseases)
+    global unified_disease_model  # Must declare global to persist
     unified_model_path = REAL_MODELS_DIR / 'unified_disease_model.pkl'
     try:
         if unified_model_path.exists() and UnifiedDiseaseModel is not None:
             unified_disease_model = UnifiedDiseaseModel.load(str(unified_model_path))
             print(f"✓ Unified model loaded: {len(unified_disease_model.models)}/12 diseases")
         else:
-            print(f"  ⚠ Unified model not found at {unified_model_path}")
+            print(f"  ⚠ Unified model not found at {unified_model_path} or UnifiedDiseaseModel={UnifiedDiseaseModel}")
     except Exception as e:
+        import traceback
         print(f"  ✗ Unified model load error: {e}")
+        traceback.print_exc()
     
     # Load medical knowledge base
     try:
@@ -3659,10 +3662,20 @@ async def debug_paths():
         if hasattr(model, 'feature_names'):
             model_features[disease_id] = model.feature_names
     
+    # Unified model info
+    unified_info = None
+    if unified_disease_model is not None:
+        unified_info = {
+            "loaded": True,
+            "diseases": list(unified_disease_model.models.keys()),
+            "count": len(unified_disease_model.models)
+        }
+    
     return {
         "cwd": os.getcwd(),
         "real_models_dir": str(REAL_MODELS_DIR),
         "loaded_models": list(real_disease_models.keys()),
+        "unified_model": unified_info,
         "model_features": model_features
     }
 
