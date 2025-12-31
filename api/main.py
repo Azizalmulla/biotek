@@ -8491,16 +8491,34 @@ Only include diseases that have actual PRS data in the report. If a field is not
 Return ONLY the JSON, no markdown, no explanation."""
 
     try:
-        # Call GLM for extraction - use vision for images/PDFs
+        # Determine file extension for proper formatting
+        ext = file_name.lower().split('.')[-1] if '.' in file_name else ''
+        is_pdf = ext == 'pdf'
+        is_image = ext in ['png', 'jpg', 'jpeg', 'webp', 'gif']
+        
+        # Call GLM for extraction - different format for PDFs vs images
         if is_visual_content:
-            # Send as multimodal message with image/document
-            messages = [
-                {"role": "system", "content": "You are a precise medical data extraction AI. Return only valid JSON."},
-                {"role": "user", "content": [
-                    {"type": "text", "text": extraction_prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{file_content}"}}
-                ]}
-            ]
+            if is_pdf:
+                # PDFs use type: "file" format per OpenRouter docs
+                messages = [
+                    {"role": "system", "content": "You are a precise medical data extraction AI. Return only valid JSON."},
+                    {"role": "user", "content": [
+                        {"type": "text", "text": extraction_prompt},
+                        {"type": "file", "file": {
+                            "filename": file_name,
+                            "file_data": f"data:{mime_type};base64,{file_content}"
+                        }}
+                    ]}
+                ]
+            else:
+                # Images use type: "image_url" format
+                messages = [
+                    {"role": "system", "content": "You are a precise medical data extraction AI. Return only valid JSON."},
+                    {"role": "user", "content": [
+                        {"type": "text", "text": extraction_prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{file_content}"}}
+                    ]}
+                ]
         else:
             # Text content - include in prompt
             full_prompt = f"{extraction_prompt}\n\nREPORT CONTENT:\n{file_content[:8000]}"
