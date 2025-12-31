@@ -1350,6 +1350,36 @@ async def debug_check_staff_accounts():
     return results
 
 
+@app.get("/debug/check-patient-accounts")
+async def debug_check_patient_accounts():
+    """TEMPORARY: Debug patient accounts to find login issue"""
+    from database import execute_query
+    results = {"accounts": [], "test_password": None}
+    
+    try:
+        # List all patient accounts
+        accounts = execute_query("""
+            SELECT patient_id, email, verified, failed_login_attempts, locked_until,
+                   LEFT(password_hash, 20) as hash_prefix
+            FROM patient_accounts
+        """, (), fetch='all') or []
+        
+        for acc in accounts:
+            results["accounts"].append({
+                "patient_id": acc[0],
+                "email": acc[1],
+                "verified": acc[2],
+                "failed_attempts": acc[3],
+                "locked_until": acc[4],
+                "hash_prefix": acc[5]
+            })
+        
+    except Exception as e:
+        results["error"] = str(e)
+    
+    return results
+
+
 @app.get("/debug/test-encounter")
 async def debug_test_encounter():
     """TEMPORARY: Test encounter creation to debug errors"""
