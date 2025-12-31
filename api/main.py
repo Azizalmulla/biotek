@@ -1424,6 +1424,44 @@ async def run_migrations(
         return {"status": "error", "error": str(e)}
 
 
+@app.post("/debug/test-draft")
+async def debug_test_draft(request: dict):
+    """TEMPORARY: Test find-or-create-draft logic"""
+    from database import execute_query
+    results = {"request": request, "steps": []}
+    
+    patient_id = request.get("patient_id", "UNKNOWN")
+    
+    # Step 1: Find existing draft
+    try:
+        existing = execute_query("""
+            SELECT encounter_id, status FROM encounters 
+            WHERE patient_id = ? AND status = 'draft'
+            ORDER BY created_at DESC LIMIT 1
+        """, (patient_id,), fetch='one')
+        results["steps"].append({"step": "FIND_DRAFT", "success": True, "result": str(existing)})
+        
+        if existing:
+            return {"encounter_id": existing[0], "status": "draft", "reused": True, "debug": results}
+    except Exception as e:
+        results["steps"].append({"step": "FIND_DRAFT", "success": False, "error": str(e)})
+    
+    # Step 2: Create new draft
+    import uuid
+    from datetime import datetime
+    enc_id = f"ENC-{uuid.uuid4().hex[:12].upper()}"
+    try:
+        execute_query("""
+            INSERT INTO encounters (encounter_id, patient_id, created_by, created_by_role, created_at, encounter_type, status, notes)
+            VALUES (?, ?, ?, ?, ?, ?, 'draft', '')
+        """, (enc_id, patient_id, "debug", "doctor", datetime.now().isoformat(), "test"))
+        results["steps"].append({"step": "CREATE_DRAFT", "success": True, "encounter_id": enc_id})
+        return {"encounter_id": enc_id, "status": "draft", "reused": False, "debug": results}
+    except Exception as e:
+        results["steps"].append({"step": "CREATE_DRAFT", "success": False, "error": str(e)})
+        return {"error": str(e), "debug": results}
+
+
 @app.get("/debug/test-encounter")
 async def debug_test_encounter():
     """TEMPORARY: Test encounter creation to debug errors"""
