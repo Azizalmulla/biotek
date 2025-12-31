@@ -1111,13 +1111,15 @@ class PredictionResponse(BaseModel):
 
 
 class AuditLog(BaseModel):
-    """Audit log entry"""
+    """Audit log entry - EVENT-BASED (no clinical data)"""
     id: int
     timestamp: str
+    event_type: str  # prediction_run, encounter_created, encounter_completed, ai_note_generated, etc.
     patient_id: Optional[str]
-    risk_category: str
-    used_genetics: bool
-    model_version: str
+    encounter_id: Optional[str]
+    actor_id: str
+    actor_role: str
+    model_version: Optional[str] = "1.0.0"
 
 
 # ============ Helper Functions ============
@@ -1496,6 +1498,43 @@ async def debug_test_encounter():
         results["encounter_count"] = verify[0] if verify else 0
     except Exception as e:
         results["encounter_count_error"] = str(e)
+    
+    return results
+
+
+@app.delete("/admin/clear-demo-data")
+async def clear_demo_data(
+    admin_id: str = Header(..., alias="X-Admin-ID"),
+    confirm: str = Header(..., alias="X-Confirm-Delete")
+):
+    """
+    Clear demo/test data from the system.
+    Requires admin authentication and confirmation header.
+    """
+    if confirm != "YES_DELETE_DEMO_DATA":
+        return {"error": "Must provide X-Confirm-Delete: YES_DELETE_DEMO_DATA header"}
+    
+    results = {"cleared": []}
+    
+    try:
+        # Clear test encounters (keep real patient encounters)
+        execute_query("DELETE FROM encounters WHERE patient_id LIKE 'PAT-TEST%' OR patient_id LIKE 'PAT-DEBUG%' OR encounter_id LIKE 'ENC-TEST%'")
+        results["cleared"].append("test_encounters")
+        
+        # Clear test predictions
+        execute_query("DELETE FROM encounter_predictions WHERE encounter_id LIKE 'ENC-TEST%'")
+        results["cleared"].append("test_predictions")
+        
+        # Clear old access logs older than 7 days (keep recent for audit)
+        execute_query("DELETE FROM access_log WHERE timestamp < datetime('now', '-7 days')")
+        results["cleared"].append("old_access_logs")
+        
+        results["status"] = "success"
+        results["message"] = "Demo/test data cleared. Production data preserved."
+        
+    except Exception as e:
+        results["status"] = "error"
+        results["error"] = str(e)
     
     return results
 
@@ -4858,34 +4897,72 @@ def log_prediction(patient_id: str, input_data: str, prediction: float,
         print(f"Warning: Failed to log prediction: {e}")
 
 
-@app.get("/audit/logs", response_model=List[AuditLog])
-async def get_audit_logs(limit: int = 50):
+@app.get("/audit/logs")
+async def get_audit_logs(limit: int = 50, patient_id: Optional[str] = None):
     """
-    Retrieve audit logs of predictions
+    Retrieve audit event logs (COMPLIANCE-FOCUSED)
     
-    Returns last N predictions for transparency and compliance
+    Returns events only - no clinical interpretations (risk labels, etc.)
+    Clinical data lives in encounter_* tables, not audit logs.
     """
     try:
         ph = get_placeholder()
-        query = f"""
-            SELECT id, timestamp, patient_id, risk_category, 
-                   used_genetics, model_version
-            FROM predictions
-            ORDER BY timestamp DESC
-            LIMIT {ph}
-        """
-        rows = execute_query(query, (limit,), fetch='all') or []
+        
+        # Query access_log for events (this is the proper audit trail)
+        if patient_id:
+            query = f"""
+                SELECT id, timestamp, user_id, user_role, purpose, data_type, patient_id, reason
+                FROM access_log
+                WHERE patient_id = {ph}
+                ORDER BY timestamp DESC
+                LIMIT {ph}
+            """
+            rows = execute_query(query, (patient_id, limit), fetch='all') or []
+        else:
+            query = f"""
+                SELECT id, timestamp, user_id, user_role, purpose, data_type, patient_id, reason
+                FROM access_log
+                ORDER BY timestamp DESC
+                LIMIT {ph}
+            """
+            rows = execute_query(query, (limit,), fetch='all') or []
         
         logs = []
         for row in rows:
-            logs.append(AuditLog(
-                id=row[0],
-                timestamp=row[1],
-                patient_id=row[2],
-                risk_category=row[3],
-                used_genetics=bool(row[4]),
-                model_version=row[5]
-            ))
+            # Map purpose to event_type for clarity
+            purpose = row[4] or 'unknown'
+            event_type_map = {
+                'prediction_run': 'prediction_run',
+                'encounter_create': 'encounter_created',
+                'encounter_reuse': 'encounter_reused', 
+                'encounter_complete': 'encounter_completed',
+                'analysis_rerun': 'analysis_rerun',
+                'treatment': 'treatment_accessed',
+                'care': 'care_note_added',
+                'research': 'research_access',
+                'diagnosis': 'diagnosis_accessed',
+            }
+            event_type = event_type_map.get(purpose, purpose)
+            
+            # Extract encounter_id from reason if present
+            reason = row[7] or ''
+            encounter_id = None
+            if 'encounter' in reason.lower() and 'ENC-' in reason:
+                import re
+                match = re.search(r'ENC-[A-Z0-9]+', reason)
+                if match:
+                    encounter_id = match.group(0)
+            
+            logs.append({
+                "id": row[0],
+                "timestamp": row[1],
+                "event_type": event_type,
+                "patient_id": row[6],
+                "encounter_id": encounter_id,
+                "actor_id": row[2],
+                "actor_role": row[3],
+                "model_version": "1.0.0"  # TODO: track actual model version in events
+            })
         
         return logs
         

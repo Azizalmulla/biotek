@@ -1710,7 +1710,7 @@ export default function PlatformPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-2xl font-bold text-black mb-2">Audit Trail</h2>
-                  <p className="text-sm text-black/60">Complete prediction history with consent tracking</p>
+                  <p className="text-sm text-black/60">Event log for compliance — clinical data stored in encounters</p>
                 </div>
                 <button
                   onClick={loadAuditLogs}
@@ -1722,36 +1722,42 @@ export default function PlatformPage() {
 
               {auditLogs.length > 0 ? (
                 <div className="overflow-x-auto">
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                    <strong>ℹ️ Compliance Note:</strong> This audit trail shows <em>events only</em> (who did what, when). 
+                    Clinical data (predictions, treatments) is stored separately in encounter records.
+                  </div>
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-black/10">
-                        <th className="text-left py-3 px-4 text-sm font-medium text-black/70">ID</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-black/70">Event Type</th>
                         <th className="text-left py-3 px-4 text-sm font-medium text-black/70">Timestamp</th>
                         <th className="text-left py-3 px-4 text-sm font-medium text-black/70">Patient</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-black/70">Risk</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-black/70">Genetics</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-black/70">Encounter</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-black/70">Actor</th>
                         <th className="text-left py-3 px-4 text-sm font-medium text-black/70">Model</th>
                       </tr>
                     </thead>
                     <tbody>
                       {auditLogs.map((log) => (
                         <tr key={log.id} className="border-b border-black/5 hover:bg-black/5">
-                          <td className="py-3 px-4 text-sm text-black">{log.id}</td>
-                          <td className="py-3 px-4 text-sm text-black/70">
-                            {new Date(log.timestamp).toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4 text-sm font-mono text-black/70">{log.patient_id}</td>
                           <td className="py-3 px-4">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              log.risk_category === 'High Risk'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-green-100 text-green-700'
+                              log.event_type?.includes('created') ? 'bg-green-100 text-green-700' :
+                              log.event_type?.includes('completed') ? 'bg-blue-100 text-blue-700' :
+                              log.event_type?.includes('rerun') || log.event_type?.includes('reused') ? 'bg-amber-100 text-amber-700' :
+                              'bg-stone-100 text-stone-700'
                             }`}>
-                              {log.risk_category}
+                              {log.event_type || 'event'}
                             </span>
                           </td>
                           <td className="py-3 px-4 text-sm text-black/70">
-                            {log.used_genetics ? 'Yes' : 'No'}
+                            {new Date(log.timestamp).toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4 text-sm font-mono text-black/70">{log.patient_id || '—'}</td>
+                          <td className="py-3 px-4 text-sm font-mono text-black/50">{log.encounter_id || '—'}</td>
+                          <td className="py-3 px-4 text-sm text-black/70">
+                            <span className="font-medium">{log.actor_role}</span>
+                            <span className="text-black/40 ml-1">({log.actor_id})</span>
                           </td>
                           <td className="py-3 px-4 text-sm text-black/70">v{log.model_version}</td>
                         </tr>
@@ -1762,7 +1768,7 @@ export default function PlatformPage() {
               ) : (
                 <div className="text-center py-12">
                   <div className="text-4xl mb-4">📋</div>
-                  <p className="text-black/60">No predictions yet</p>
+                  <p className="text-black/60">No audit events recorded yet</p>
                 </div>
               )}
             </motion.div>
