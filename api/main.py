@@ -512,6 +512,12 @@ def init_database():
             )
         """)
         
+        # Migration: Add locked_until column if it doesn't exist
+        try:
+            execute_query("ALTER TABLE patient_accounts ADD COLUMN locked_until TEXT")
+        except:
+            pass  # Column already exists
+        
         # Patient verification codes
         execute_query("""
             CREATE TABLE IF NOT EXISTS verification_codes (
