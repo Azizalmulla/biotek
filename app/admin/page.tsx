@@ -736,10 +736,10 @@ export default function AdminDashboard() {
                               <div className="flex items-center justify-between">
                                 <span className="text-xs text-black/50">Accuracy</span>
                                 <span className={`text-sm font-bold ${
-                                  (info.accuracy || 0) >= 0.85 ? 'text-green-600' : 
-                                  (info.accuracy || 0) >= 0.75 ? 'text-amber-600' : 'text-red-600'
+                                  (info.accuracy || 0) >= 85 ? 'text-green-600' : 
+                                  (info.accuracy || 0) >= 75 ? 'text-amber-600' : 'text-red-600'
                                 }`}>
-                                  {((info.accuracy || 0) * 100).toFixed(1)}%
+                                  {(info.accuracy || 0).toFixed(1)}%
                                 </span>
                               </div>
                               <div className="flex items-center justify-between mt-1">
