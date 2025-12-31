@@ -858,31 +858,36 @@ def init_database():
             except Exception:
                 pass  # Column may already exist
         
-        # Seed default admin account if none exists
-        result = execute_query("SELECT COUNT(*) FROM admin_accounts", (), fetch='one')
-        if result and result[0] == 0:
-            default_password_hash = hash_password("BioTeK2024!")
-            execute_query("""
-                INSERT INTO admin_accounts (admin_id, email, password_hash, full_name, created_at, super_admin)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, ("admin", "admin@biotek.health", default_password_hash, "System Administrator", datetime.now().isoformat(), 1))
+        # Seed/update default admin account (upsert to fix existing account)
+        default_password_hash = hash_password("BioTeK2024!")
+        execute_query("""
+            INSERT INTO admin_accounts (admin_id, email, password_hash, full_name, created_at, super_admin)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (admin_id) DO UPDATE SET 
+                password_hash = EXCLUDED.password_hash,
+                super_admin = EXCLUDED.super_admin
+        """, ("admin", "admin@biotek.health", default_password_hash, "System Administrator", datetime.now().isoformat(), 1))
         
-        # Seed default staff accounts if none exist
-        result = execute_query("SELECT COUNT(*) FROM staff_accounts", (), fetch='one')
-        if result and result[0] == 0:
-            default_pw = hash_password("demo123")
-            now = datetime.now().isoformat()
-            demo_accounts = [
-                ("doctor_DOC001", "doctor@biotek.health", default_pw, "doctor", "Dr. Sarah Smith", "EMP-DOC-001", "Internal Medicine", now, "system", 1),
-                ("nurse_NUR001", "nurse@biotek.health", default_pw, "nurse", "Emily Johnson RN", "EMP-NUR-001", "Patient Care", now, "system", 1),
-                ("researcher_RES001", "researcher@biotek.health", default_pw, "researcher", "Dr. Michael Chen", "EMP-RES-001", "Clinical Research", now, "system", 1),
-                ("receptionist_REC001", "receptionist@biotek.health", default_pw, "receptionist", "Lisa Martinez", "EMP-REC-001", "Front Desk", now, "system", 1),
-            ]
-            for user_id, email, pwd_hash, role, full_name, emp_id, dept, created, created_by, activated in demo_accounts:
-                execute_query("""
-                    INSERT INTO staff_accounts (user_id, email, password_hash, role, full_name, employee_id, department, created_at, created_by, activated)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (user_id, email, pwd_hash, role, full_name, emp_id, dept, created, created_by, activated))
+        # Seed/update default staff accounts (upsert to fix existing accounts)
+        default_pw = hash_password("demo123")
+        now = datetime.now().isoformat()
+        demo_accounts = [
+            ("doctor_DOC001", "doctor@biotek.health", default_pw, "doctor", "Dr. Sarah Smith", "EMP-DOC-001", "Internal Medicine", now, "system", 1),
+            ("nurse_NUR001", "nurse@biotek.health", default_pw, "nurse", "Emily Johnson RN", "EMP-NUR-001", "Patient Care", now, "system", 1),
+            ("researcher_RES001", "researcher@biotek.health", default_pw, "researcher", "Dr. Michael Chen", "EMP-RES-001", "Clinical Research", now, "system", 1),
+            ("receptionist_REC001", "receptionist@biotek.health", default_pw, "receptionist", "Lisa Martinez", "EMP-REC-001", "Front Desk", now, "system", 1),
+        ]
+        for user_id, email, pwd_hash, role, full_name, emp_id, dept, created, created_by, activated in demo_accounts:
+            execute_query("""
+                INSERT INTO staff_accounts (user_id, email, password_hash, role, full_name, employee_id, department, created_at, created_by, activated, account_locked, account_disabled, failed_login_attempts)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)
+                ON CONFLICT (user_id) DO UPDATE SET 
+                    password_hash = EXCLUDED.password_hash,
+                    activated = EXCLUDED.activated,
+                    account_locked = 0,
+                    account_disabled = 0,
+                    failed_login_attempts = 0
+            """, (user_id, email, pwd_hash, role, full_name, emp_id, dept, created, created_by, activated))
         
         print("✓ PostgreSQL database initialized with access control")
         print("✓ Demo accounts created (password: demo123, admin: BioTeK2024!)")
