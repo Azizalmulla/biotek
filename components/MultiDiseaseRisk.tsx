@@ -1727,10 +1727,21 @@ export default function MultiDiseaseRisk({
                                 
                                 setGeneticsImporting(true);
                                 try {
-                                  // Read file content
                                   const reader = new FileReader();
                                   reader.onload = async (event) => {
-                                    const content = event.target?.result as string;
+                                    let content = event.target?.result as string;
+                                    let fileType = 'text';
+                                    
+                                    // Determine file type
+                                    if (file.name.endsWith('.pdf')) {
+                                      fileType = 'pdf_base64';
+                                      // For PDF, content is already base64 from readAsDataURL
+                                      content = content.split(',')[1] || content; // Remove data:application/pdf;base64, prefix
+                                    } else if (file.name.endsWith('.csv')) {
+                                      fileType = 'csv';
+                                    } else if (file.name.endsWith('.json')) {
+                                      fileType = 'json';
+                                    }
                                     
                                     // Send to GLM for parsing
                                     const response = await fetch(`${API_BASE}/patient/${patientId}/genetic-results/parse-report`, {
@@ -1742,7 +1753,7 @@ export default function MultiDiseaseRisk({
                                       },
                                       body: JSON.stringify({
                                         file_content: content,
-                                        file_type: file.name.endsWith('.csv') ? 'csv' : file.name.endsWith('.json') ? 'json' : 'text',
+                                        file_type: fileType,
                                         file_name: file.name
                                       })
                                     });
@@ -1751,11 +1762,19 @@ export default function MultiDiseaseRisk({
                                       const data = await response.json();
                                       setParsedGeneticsPreview(data.extracted_data);
                                     } else {
-                                      console.error('Failed to parse report');
+                                      const errData = await response.json().catch(() => ({}));
+                                      console.error('Failed to parse report:', errData);
+                                      alert('Failed to parse report. Please try a different file format (CSV or TXT recommended).');
                                     }
                                     setGeneticsImporting(false);
                                   };
-                                  reader.readAsText(file);
+                                  
+                                  // Use appropriate reader method based on file type
+                                  if (file.name.endsWith('.pdf')) {
+                                    reader.readAsDataURL(file); // Read PDF as base64
+                                  } else {
+                                    reader.readAsText(file); // Read text files as text
+                                  }
                                 } catch (err) {
                                   console.error('File read error:', err);
                                   setGeneticsImporting(false);

@@ -8435,11 +8435,37 @@ async def parse_genetic_lab_report(
         raise HTTPException(status_code=403, detail="Only doctors can parse genetic reports")
     
     file_content = request.get("file_content", "")  # Base64 or raw text
-    file_type = request.get("file_type", "text")  # text, csv, pdf_text
+    file_type = request.get("file_type", "text")  # text, csv, pdf_base64
     file_name = request.get("file_name", "unknown")
     
     if not file_content:
         raise HTTPException(status_code=400, detail="No file content provided")
+    
+    # Handle PDF base64 - decode and extract text
+    if file_type == "pdf_base64":
+        try:
+            import base64
+            pdf_bytes = base64.b64decode(file_content)
+            # Try to extract text from PDF using simple method
+            # Look for text between stream/endstream or just decode readable parts
+            try:
+                # Try PyPDF2 if available
+                import io
+                from PyPDF2 import PdfReader
+                pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+                extracted_text = ""
+                for page in pdf_reader.pages:
+                    extracted_text += page.extract_text() + "\n"
+                file_content = extracted_text if extracted_text.strip() else "PDF content could not be extracted"
+            except ImportError:
+                # Fallback: extract any readable ASCII from PDF
+                file_content = pdf_bytes.decode('latin-1', errors='ignore')
+                # Filter to printable characters
+                file_content = ''.join(c for c in file_content if c.isprintable() or c in '\n\t ')
+            file_type = "text"
+        except Exception as pdf_err:
+            print(f"[GENETICS] PDF decode error: {pdf_err}")
+            file_content = "Failed to decode PDF content"
     
     # Build prompt for GLM to extract genetic data
     extraction_prompt = f"""You are a clinical genetics data extraction specialist. 
