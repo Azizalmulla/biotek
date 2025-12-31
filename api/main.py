@@ -596,6 +596,15 @@ def init_database():
         )
     """)
     
+    # Seed default admin account if none exists
+    cursor.execute("SELECT COUNT(*) FROM admin_accounts")
+    if cursor.fetchone()[0] == 0:
+        default_password_hash = hash_password("BioTeK2024!")
+        cursor.execute("""
+            INSERT INTO admin_accounts (admin_id, email, password_hash, full_name, created_at, super_admin)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, ("admin", "admin@biotek.health", default_password_hash, "System Administrator", datetime.now().isoformat(), 1))
+    
     # Staff account audit log
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS staff_account_audit (
