@@ -132,10 +132,11 @@ export default function MultiDiseaseRisk({
   const [currentEncounterId, setCurrentEncounterId] = useState<string | null>(initialEncounterId || null);
   const [isFinalized, setIsFinalized] = useState(encounterStatus === 'finalized');
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
+  const [analysisPatientId, setAnalysisPatientId] = useState<string | null>(null); // Track which patient the analysis was run for
   
   // Sync encounter ID from parent prop
   useEffect(() => {
-    if (initialEncounterId && initialEncounterId !== currentEncounterId) {
+    if (initialEncounterId) {
       setCurrentEncounterId(initialEncounterId);
     }
   }, [initialEncounterId]);
@@ -239,6 +240,9 @@ export default function MultiDiseaseRisk({
     setError(null);
 
     try {
+      // Track which patient this analysis is for
+      setAnalysisPatientId(patientId || null);
+      
       // ENCOUNTER-FIRST: Create encounter before running analysis
       let encounterId = currentEncounterId;
       if (!encounterId && onCreateEncounter && patientId) {
@@ -663,8 +667,9 @@ export default function MultiDiseaseRisk({
   const [isFinalizingEncounter, setIsFinalizingEncounter] = useState(false);
   
   const handleFinalizeEncounter = async () => {
-    if (!result || !patientId || !currentEncounterId) {
-      console.error('Cannot finalize: missing result, patientId, or encounterId');
+    const effectivePatientId = analysisPatientId || patientId;
+    if (!result || !effectivePatientId || !currentEncounterId) {
+      console.error('Cannot finalize: missing result, patientId, or encounterId', { result: !!result, patientId: effectivePatientId, encounterId: currentEncounterId });
       return;
     }
     
@@ -679,7 +684,7 @@ export default function MultiDiseaseRisk({
           'X-User-Role': userRole || 'doctor'
         },
         body: JSON.stringify({
-          patient_id: patientId,
+          patient_id: effectivePatientId,
           prediction: result,
           visibility: 'patient_visible'
         }),
@@ -1008,7 +1013,7 @@ export default function MultiDiseaseRisk({
                 </div>
                 {!isFinalized && (
                   <>
-                    {patientId && currentEncounterId ? (
+                    {(analysisPatientId || patientId) && currentEncounterId ? (
                       <motion.button
                         onClick={handleFinalizeEncounter}
                         disabled={isFinalizingEncounter}
@@ -1030,7 +1035,7 @@ export default function MultiDiseaseRisk({
                       </motion.button>
                     ) : (
                       <div className="px-4 py-2 bg-amber-100 text-amber-800 text-sm rounded-lg">
-                        Select a patient to finalize
+                        {!currentEncounterId ? 'Run analysis first' : 'Select a patient to finalize'}
                       </div>
                     )}
                   </>
