@@ -7689,7 +7689,7 @@ async def add_patient_care_note(
 @app.get("/encounters/test-endpoint")
 async def test_encounter_endpoint():
     """Simple test to verify encounters endpoint is reachable"""
-    return {"status": "ok", "message": "Encounters endpoint is working", "timestamp": datetime.now().isoformat()}
+    return {"status": "ok", "message": "Encounters endpoint is working", "version": "v2-request-fix", "timestamp": datetime.now().isoformat()}
 
 
 @app.post("/encounters/draft")
