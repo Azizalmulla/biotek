@@ -1884,7 +1884,7 @@ async def create_staff_account(request: CreateStaffRequest, admin_id: str = Head
             request.department,
             datetime.now().isoformat(),
             admin_id,
-            0,  # Not activated yet
+            False,  # Not activated yet
             activation_token
         ))
         
