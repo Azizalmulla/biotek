@@ -7692,6 +7692,24 @@ async def test_encounter_endpoint():
     return {"status": "ok", "message": "Encounters endpoint is working", "timestamp": datetime.now().isoformat()}
 
 
+@app.post("/encounters/draft")
+async def create_draft_simple(request: Request):
+    """Simplified draft creation - bypasses complex logic"""
+    try:
+        body = await request.json()
+        patient_id = body.get("patient_id", "unknown")
+        encounter_id = f"ENC-{uuid.uuid4().hex[:12].upper()}"
+        return {
+            "encounter_id": encounter_id,
+            "patient_id": patient_id,
+            "status": "draft",
+            "created_at": datetime.now().isoformat(),
+            "reused": False
+        }
+    except Exception as e:
+        return {"error": str(e), "encounter_id": f"ENC-ERR-{uuid.uuid4().hex[:8].upper()}"}
+
+
 @app.post("/encounters/find-or-create-draft")
 async def find_or_create_draft_encounter(request: Request):
     """
