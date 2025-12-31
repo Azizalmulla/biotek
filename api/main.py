@@ -2126,39 +2126,31 @@ async def login_staff(request: StaffLoginRequest):
     Healthcare worker login with password verification
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Get staff account
-        cursor.execute("""
+        # Get staff account using PostgreSQL-compatible query
+        result = execute_query("""
             SELECT password_hash, email, role, full_name, activated,
                    account_locked, account_disabled, failed_login_attempts
             FROM staff_accounts
             WHERE user_id = ?
-        """, (request.user_id,))
-        
-        result = cursor.fetchone()
+        """, (request.user_id,), fetch='one')
         
         if not result:
-            conn.close()
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
         password_hash, email, role, full_name, activated, account_locked, account_disabled, failed_attempts = result
         
         # Check account status
         if account_disabled:
-            conn.close()
             raise HTTPException(status_code=403, detail="Account has been disabled. Contact administrator.")
         
         if account_locked:
-            conn.close()
             raise HTTPException(status_code=403, detail="Account is locked. Contact administrator.")
         
         # Verify password
         if not verify_password(request.password, password_hash):
             # Increment failed attempts
-            new_failed_attempts = failed_attempts + 1
-            cursor.execute("""
+            new_failed_attempts = (failed_attempts or 0) + 1
+            execute_query("""
                 UPDATE staff_accounts
                 SET failed_login_attempts = ?
                 WHERE user_id = ?
@@ -2166,25 +2158,20 @@ async def login_staff(request: StaffLoginRequest):
             
             # Lock account after 5 failed attempts
             if new_failed_attempts >= 5:
-                cursor.execute("""
+                execute_query("""
                     UPDATE staff_accounts
                     SET account_locked = 1
                     WHERE user_id = ?
                 """, (request.user_id,))
             
-            conn.commit()
-            conn.close()
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
         # Reset failed attempts and update last login
-        cursor.execute("""
+        execute_query("""
             UPDATE staff_accounts
             SET failed_login_attempts = 0, last_login = ?, activated = 1
             WHERE user_id = ?
         """, (datetime.now().isoformat(), request.user_id))
-        
-        conn.commit()
-        conn.close()
         
         # Create session
         session = create_session(request.user_id, role)
@@ -2234,25 +2221,24 @@ async def get_staff_accounts(admin_id: str = Header(..., alias="X-Admin-ID")):
     Get list of all staff accounts (admin only)
     """
     try:
-        # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        # Verify admin using PostgreSQL-compatible query
+        admin_check = execute_query(
+            "SELECT admin_id FROM admin_accounts WHERE admin_id = ?",
+            (admin_id,), fetch='one'
+        )
+        if not admin_check:
             raise HTTPException(status_code=403, detail="Unauthorized")
         
         # Get all staff accounts
-        cursor.execute("""
+        rows = execute_query("""
             SELECT user_id, email, role, full_name, employee_id, department,
                    created_at, activated, account_locked, account_disabled, last_login
             FROM staff_accounts
             ORDER BY created_at DESC
-        """)
+        """, (), fetch='all') or []
         
         accounts = []
-        for row in cursor.fetchall():
+        for row in rows:
             accounts.append({
                 "user_id": row[0],
                 "email": row[1],
@@ -2261,13 +2247,12 @@ async def get_staff_accounts(admin_id: str = Header(..., alias="X-Admin-ID")):
                 "employee_id": row[4],
                 "department": row[5],
                 "created_at": row[6],
-                "activated": bool(row[7]),
-                "account_locked": bool(row[8]),
-                "account_disabled": bool(row[9]),
+                "activated": bool(row[7]) if row[7] is not None else False,
+                "account_locked": bool(row[8]) if row[8] is not None else False,
+                "account_disabled": bool(row[9]) if row[9] is not None else False,
                 "last_login": row[10]
             })
         
-        conn.close()
         return {"staff_accounts": accounts, "total": len(accounts)}
         
     except HTTPException:
