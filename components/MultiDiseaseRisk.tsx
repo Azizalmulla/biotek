@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const API_BASE = 'https://biotek-production.up.railway.app';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -133,11 +133,13 @@ export default function MultiDiseaseRisk({
   const [isFinalized, setIsFinalized] = useState(encounterStatus === 'finalized');
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
   const [analysisPatientId, setAnalysisPatientId] = useState<string | null>(null); // Track which patient the analysis was run for
+  const encounterIdRef = useRef<string | null>(initialEncounterId || null); // Ref for immediate access
   
   // Sync encounter ID from parent prop
   useEffect(() => {
     if (initialEncounterId) {
       setCurrentEncounterId(initialEncounterId);
+      encounterIdRef.current = initialEncounterId;
     }
   }, [initialEncounterId]);
   
@@ -250,6 +252,7 @@ export default function MultiDiseaseRisk({
         encounterId = await onCreateEncounter();
         if (encounterId) {
           setCurrentEncounterId(encounterId);
+          encounterIdRef.current = encounterId; // Update ref immediately
           console.log('[ENCOUNTER] Created:', encounterId);
         }
       }
@@ -668,15 +671,16 @@ export default function MultiDiseaseRisk({
   
   const handleFinalizeEncounter = async () => {
     const effectivePatientId = analysisPatientId || patientId;
-    if (!result || !effectivePatientId || !currentEncounterId) {
-      console.error('Cannot finalize: missing result, patientId, or encounterId', { result: !!result, patientId: effectivePatientId, encounterId: currentEncounterId });
+    const effectiveEncounterId = currentEncounterId || encounterIdRef.current;
+    if (!result || !effectivePatientId || !effectiveEncounterId) {
+      console.error('Cannot finalize: missing result, patientId, or encounterId', { result: !!result, patientId: effectivePatientId, encounterId: effectiveEncounterId });
       return;
     }
     
     setIsFinalizingEncounter(true);
     try {
       // 1. Save prediction to encounter
-      await fetch(`${API_BASE}/encounters/${currentEncounterId}/prediction`, {
+      await fetch(`${API_BASE}/encounters/${effectiveEncounterId}/prediction`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -699,12 +703,12 @@ export default function MultiDiseaseRisk({
           'X-User-Role': userRole || 'doctor'
         },
         body: JSON.stringify({
-          encounter_id: currentEncounterId
+          encounter_id: effectiveEncounterId
         }),
       });
       
       setIsFinalized(true);
-      console.log('[FINALIZED] Encounter completed and prediction saved:', currentEncounterId);
+      console.log('[FINALIZED] Encounter completed and prediction saved:', effectiveEncounterId);
       
       // Call parent callback if provided
       if (onFinalize) {
@@ -1013,7 +1017,7 @@ export default function MultiDiseaseRisk({
                 </div>
                 {!isFinalized && (
                   <>
-                    {(analysisPatientId || patientId) && currentEncounterId ? (
+                    {(analysisPatientId || patientId) && (currentEncounterId || encounterIdRef.current) ? (
                       <motion.button
                         onClick={handleFinalizeEncounter}
                         disabled={isFinalizingEncounter}
