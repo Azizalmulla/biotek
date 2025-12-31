@@ -223,51 +223,158 @@ export default function PatientDashboard() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="bg-white/80 backdrop-blur-md rounded-3xl p-8"
+              className="space-y-6"
             >
-              <h2 className="text-2xl font-bold text-black mb-6">My Risk Predictions</h2>
+              {/* Header Section */}
+              <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8">
+                <h2 className="text-2xl font-bold text-black mb-2">My Health Risk Estimates</h2>
+                <p className="text-black/60 text-sm">
+                  These estimates are based on your clinical data and help identify areas for preventive care.
+                </p>
+              </div>
+
+              {/* Important Disclaimer Banner */}
+              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">ℹ️</span>
+                  <div>
+                    <div className="font-medium text-blue-900">Understanding Your Results</div>
+                    <p className="text-sm text-blue-800 mt-1">
+                      These are <strong>risk estimates</strong>, not medical diagnoses. They indicate areas where 
+                      preventive measures may be beneficial. Always discuss results with your healthcare provider 
+                      before making health decisions.
+                    </p>
+                  </div>
+                </div>
+              </div>
               
               {myPredictions.length > 0 ? (
-                <div className="space-y-4">
-                  {myPredictions.map((pred) => (
-                    <div key={pred.id} className="p-6 bg-black/5 rounded-2xl">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <div className="text-sm text-black/50">
-                            {new Date(pred.timestamp).toLocaleDateString()} at{' '}
-                            {new Date(pred.timestamp).toLocaleTimeString()}
-                          </div>
-                          <div className="text-xs text-black/40 font-mono">{pred.patient_id}</div>
-                        </div>
-                        <span className={`px-4 py-2 rounded-full text-sm font-medium ${
-                          pred.risk_category === 'High Risk'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-green-100 text-green-700'
-                        }`}>
-                          {pred.risk_category}
-                        </span>
-                      </div>
+                <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8">
+                  <div className="space-y-4">
+                    {myPredictions.map((pred) => {
+                      // Determine if this is a clinical diagnosis vs risk estimate
+                      const isDiagnosed = pred.diagnostic_threshold_met === true;
+                      // Patient-safe risk category (cap at HIGH, never show VERY HIGH)
+                      const displayCategory = pred.risk_category === 'VERY HIGH' ? 'HIGH' : pred.risk_category;
+                      // Round percentage to nearest 5 for less alarming display
+                      const displayPercentage = pred.risk_percentage !== undefined 
+                        ? Math.round(pred.risk_percentage / 5) * 5 
+                        : null;
                       
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-black/50">Genetic Data Used:</span>
-                          <span className="ml-2 font-medium">{pred.used_genetics ? 'Yes' : 'No'}</span>
+                      return (
+                        <div 
+                          key={pred.disease_id || pred.id} 
+                          className={`p-6 rounded-2xl border ${
+                            isDiagnosed 
+                              ? 'bg-purple-50 border-purple-200' 
+                              : 'bg-stone-50 border-stone-200'
+                          }`}
+                        >
+                          {/* Header: Disease Name + Risk Badge */}
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex-1">
+                              {/* Framed as Risk Estimate */}
+                              <div className="text-xs uppercase tracking-wide text-black/50 mb-1">
+                                {isDiagnosed ? 'Clinical Finding' : 'Risk Estimate'}
+                              </div>
+                              <div className="text-lg font-semibold text-black">
+                                {pred.name || pred.disease_id || 'Health Condition'}
+                              </div>
+                              {isDiagnosed && (
+                                <div className="flex items-center gap-2 mt-2">
+                                  <span className="px-2 py-1 bg-purple-600 text-white text-xs font-medium rounded-full">
+                                    Clinically Identified
+                                  </span>
+                                  <span className="text-xs text-purple-700">
+                                    Based on your lab values
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Risk Level Badge */}
+                            {!isDiagnosed && (
+                              <span className={`px-4 py-2 rounded-full text-sm font-medium ${
+                                displayCategory === 'HIGH'
+                                  ? 'bg-red-100 text-red-700'
+                                  : displayCategory === 'MODERATE'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-green-100 text-green-700'
+                              }`}>
+                                {displayCategory === 'HIGH' ? 'Higher Risk' : 
+                                 displayCategory === 'MODERATE' ? 'Moderate Risk' : 'Lower Risk'}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Risk Percentage (rounded, patient-friendly) */}
+                          {!isDiagnosed && displayPercentage !== null && (
+                            <div className="mb-4">
+                              <div className="flex justify-between text-sm mb-2">
+                                <span className="text-black/60">Estimated risk level</span>
+                                <span className="font-medium text-black/80">~{displayPercentage}%</span>
+                              </div>
+                              <div className="h-3 bg-black/10 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all ${
+                                    displayPercentage >= 25 ? 'bg-red-400' : 
+                                    displayPercentage >= 15 ? 'bg-amber-400' : 'bg-green-400'
+                                  }`}
+                                  style={{ width: `${Math.min(displayPercentage, 100)}%` }}
+                                />
+                              </div>
+                              <p className="text-xs text-black/40 mt-1">
+                                Compared to general population averages
+                              </p>
+                            </div>
+                          )}
+                          
+                          {/* Key Info Grid */}
+                          <div className="flex flex-wrap gap-4 text-sm mb-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-black/40">🧬</span>
+                              <span className="text-black/60">Genetic data:</span>
+                              <span className="font-medium">{pred.used_genetics ? 'Included' : 'Not included'}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-black/40">📅</span>
+                              <span className="text-black/60">Assessed:</span>
+                              <span className="font-medium">
+                                {new Date(pred.timestamp).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Patient-Safe Disclaimer */}
+                          <div className="pt-3 border-t border-black/10">
+                            <p className="text-xs text-black/50 italic">
+                              {isDiagnosed 
+                                ? 'This finding is based on clinical criteria. Your doctor can provide more information about next steps.'
+                                : 'This is a risk estimate, not a medical diagnosis. Discuss with your healthcare provider for personalized guidance.'}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-black/50">Model Version:</span>
-                          <span className="ml-2 font-medium">v{pred.model_version}</span>
-                        </div>
-                      </div>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Summary Footer */}
+                  <div className="mt-6 pt-6 border-t border-black/10">
+                    <div className="flex items-center justify-between text-sm text-black/50">
+                      <span>Last updated: {myPredictions[0]?.timestamp ? new Date(myPredictions[0].timestamp).toLocaleDateString() : 'N/A'}</span>
+                      <span>Reviewed by your care team</span>
                     </div>
-                  ))}
+                  </div>
                 </div>
               ) : (
-                <div className="text-center py-12">
-                  <div className="text-5xl mb-4">📊</div>
-                  <p className="text-black/60">No predictions yet</p>
-                  <p className="text-sm text-black/40 mt-2">
-                    Visit your doctor to get a risk assessment
-                  </p>
+                <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8">
+                  <div className="text-center py-12">
+                    <div className="text-5xl mb-4">📊</div>
+                    <p className="text-black/60 font-medium">No risk assessments yet</p>
+                    <p className="text-sm text-black/40 mt-2">
+                      Your doctor will share your health risk estimates after your next visit.
+                    </p>
+                  </div>
                 </div>
               )}
             </motion.div>
