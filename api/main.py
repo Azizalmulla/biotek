@@ -1424,6 +1424,44 @@ async def run_migrations(
         return {"status": "error", "error": str(e)}
 
 
+@app.get("/debug/test-encounter")
+async def debug_test_encounter():
+    """TEMPORARY: Test encounter creation to debug errors"""
+    from database import execute_query
+    results = {"steps": []}
+    
+    # Step 1: Test SELECT
+    try:
+        existing = execute_query("""
+            SELECT encounter_id, status FROM encounters LIMIT 1
+        """, (), fetch='one')
+        results["steps"].append({"step": "SELECT", "success": True, "result": str(existing)})
+    except Exception as e:
+        results["steps"].append({"step": "SELECT", "success": False, "error": str(e)})
+    
+    # Step 2: Test INSERT
+    import uuid
+    from datetime import datetime
+    test_id = f"ENC-TEST-{uuid.uuid4().hex[:8].upper()}"
+    try:
+        execute_query("""
+            INSERT INTO encounters (encounter_id, patient_id, created_by, created_by_role, created_at, encounter_type, status, notes)
+            VALUES (?, ?, ?, ?, ?, ?, 'draft', '')
+        """, (test_id, "PAT-DEBUG", "debug", "doctor", datetime.now().isoformat(), "test"))
+        results["steps"].append({"step": "INSERT", "success": True, "encounter_id": test_id})
+    except Exception as e:
+        results["steps"].append({"step": "INSERT", "success": False, "error": str(e)})
+    
+    # Step 3: Verify
+    try:
+        verify = execute_query("SELECT COUNT(*) FROM encounters", (), fetch='one')
+        results["encounter_count"] = verify[0] if verify else 0
+    except Exception as e:
+        results["encounter_count_error"] = str(e)
+    
+    return results
+
+
 @app.get("/debug/db-info")
 async def debug_db_info():
     """
