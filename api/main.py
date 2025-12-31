@@ -838,25 +838,7 @@ def init_database():
             )
         """)
         
-        # Add missing columns to staff_accounts if they don't exist (migration)
-        migration_columns = [
-            ("staff_accounts", "account_locked", "INTEGER DEFAULT 0"),
-            ("staff_accounts", "account_disabled", "INTEGER DEFAULT 0"),
-            ("staff_accounts", "failed_login_attempts", "INTEGER DEFAULT 0"),
-            ("staff_accounts", "disabled_at", "TEXT"),
-            ("staff_accounts", "disabled_by", "TEXT"),
-            ("staff_accounts", "disabled_reason", "TEXT"),
-            ("staff_accounts", "activation_token", "TEXT"),
-            ("staff_accounts", "last_login", "TEXT"),
-            ("admin_accounts", "two_factor_enabled", "INTEGER DEFAULT 0"),
-            ("admin_accounts", "two_factor_secret", "TEXT"),
-            ("admin_accounts", "backup_codes", "TEXT"),
-        ]
-        for table, column, col_type in migration_columns:
-            try:
-                execute_query(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}")
-            except Exception:
-                pass  # Column may already exist
+        # Note: Schema is managed by database.py - no additional migrations needed here
         
         # Seed/update default admin account (upsert to fix existing account)
         default_password_hash = hash_password("BioTeK2024!")
@@ -872,21 +854,20 @@ def init_database():
         default_pw = hash_password("demo123")
         now = datetime.now().isoformat()
         demo_accounts = [
-            ("doctor_DOC001", "doctor@biotek.health", default_pw, "doctor", "Dr. Sarah Smith", "EMP-DOC-001", "Internal Medicine", now, "system", 1),
-            ("nurse_NUR001", "nurse@biotek.health", default_pw, "nurse", "Emily Johnson RN", "EMP-NUR-001", "Patient Care", now, "system", 1),
-            ("researcher_RES001", "researcher@biotek.health", default_pw, "researcher", "Dr. Michael Chen", "EMP-RES-001", "Clinical Research", now, "system", 1),
-            ("receptionist_REC001", "receptionist@biotek.health", default_pw, "receptionist", "Lisa Martinez", "EMP-REC-001", "Front Desk", now, "system", 1),
+            ("doctor_DOC001", "doctor@biotek.health", default_pw, "doctor", "Dr. Sarah Smith", "EMP-DOC-001", "Internal Medicine", now, "system", True),
+            ("nurse_NUR001", "nurse@biotek.health", default_pw, "nurse", "Emily Johnson RN", "EMP-NUR-001", "Patient Care", now, "system", True),
+            ("researcher_RES001", "researcher@biotek.health", default_pw, "researcher", "Dr. Michael Chen", "EMP-RES-001", "Clinical Research", now, "system", True),
+            ("receptionist_REC001", "receptionist@biotek.health", default_pw, "receptionist", "Lisa Martinez", "EMP-REC-001", "Front Desk", now, "system", True),
         ]
         for user_id, email, pwd_hash, role, full_name, emp_id, dept, created, created_by, activated in demo_accounts:
             execute_query("""
-                INSERT INTO staff_accounts (user_id, email, password_hash, role, full_name, employee_id, department, created_at, created_by, activated, account_locked, account_disabled, failed_login_attempts)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)
+                INSERT INTO staff_accounts (user_id, email, password_hash, role, full_name, employee_id, department, created_at, created_by, activated, failed_login_attempts)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 ON CONFLICT (user_id) DO UPDATE SET 
                     password_hash = EXCLUDED.password_hash,
                     activated = EXCLUDED.activated,
-                    account_locked = 0,
-                    account_disabled = 0,
-                    failed_login_attempts = 0
+                    failed_login_attempts = 0,
+                    locked_until = NULL
             """, (user_id, email, pwd_hash, role, full_name, emp_id, dept, created, created_by, activated))
         
         print("✓ PostgreSQL database initialized with access control")
@@ -2062,7 +2043,7 @@ async def login_staff(request: StaffLoginRequest):
         # Get staff account using PostgreSQL-compatible query
         result = execute_query("""
             SELECT password_hash, email, role, full_name, activated,
-                   account_locked, account_disabled, failed_login_attempts
+                   failed_login_attempts, locked_until
             FROM staff_accounts
             WHERE user_id = ?
         """, (request.user_id,), fetch='one')
@@ -2070,14 +2051,13 @@ async def login_staff(request: StaffLoginRequest):
         if not result:
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        password_hash, email, role, full_name, activated, account_locked, account_disabled, failed_attempts = result
+        password_hash, email, role, full_name, activated, failed_attempts, locked_until = result
         
-        # Check account status
-        if account_disabled:
-            raise HTTPException(status_code=403, detail="Account has been disabled. Contact administrator.")
-        
-        if account_locked:
-            raise HTTPException(status_code=403, detail="Account is locked. Contact administrator.")
+        # Check if account is locked
+        if locked_until:
+            from datetime import datetime
+            if datetime.fromisoformat(locked_until) > datetime.now():
+                raise HTTPException(status_code=403, detail="Account is locked. Try again later.")
         
         # Verify password
         if not verify_password(request.password, password_hash):
@@ -2089,13 +2069,14 @@ async def login_staff(request: StaffLoginRequest):
                 WHERE user_id = ?
             """, (new_failed_attempts, request.user_id))
             
-            # Lock account after 5 failed attempts
+            # Lock account after 5 failed attempts (lock for 30 minutes)
             if new_failed_attempts >= 5:
+                lock_time = (datetime.now() + timedelta(minutes=30)).isoformat()
                 execute_query("""
                     UPDATE staff_accounts
-                    SET account_locked = 1
+                    SET locked_until = ?
                     WHERE user_id = ?
-                """, (request.user_id,))
+                """, (lock_time, request.user_id))
             
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
