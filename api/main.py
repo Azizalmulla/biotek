@@ -7,6 +7,7 @@ Privacy-preserving disease risk prediction API
 # Models were pickled with references to ml.train_real_data.RealDiseaseModel
 # and ml.disease_model.RealDiseaseModel - we need both aliases
 import sys
+import uuid
 from types import ModuleType
 
 # Import the actual class first

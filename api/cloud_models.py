@@ -298,7 +298,7 @@ class GLM45VClient:
         self.base_url = config.openrouter_base_url
         self.model = "z-ai/glm-4.5v"
         
-    def _make_request(self, messages: List[Dict], reasoning: bool = False) -> Dict:
+    def _make_request(self, messages: List[Dict], reasoning: bool = False, max_tokens: int = 2000) -> Dict:
         """Make request to OpenRouter API"""
         if not self.api_key:
             raise ValueError("OpenRouter API key not configured. Set OPENROUTER_API_KEY environment variable.")
@@ -313,6 +313,7 @@ class GLM45VClient:
         payload = {
             "model": self.model,
             "messages": messages,
+            "max_tokens": max_tokens,  # Limit tokens to control costs
             "reasoning": {"enabled": reasoning}  # Enable o1-style thinking
         }
         
