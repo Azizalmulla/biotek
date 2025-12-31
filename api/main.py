@@ -7600,14 +7600,17 @@ async def get_nurse_alerts(
     """Get alerts for nurse's assigned patients"""
     check_nurse_access(user_role, "alerts", user_id)
     
+    # Note: These are DEMO alerts for UI demonstration
+    # In production, alerts would be generated from real patient encounters
     return {
         "alerts": [
-            {"id": "ALT-001", "type": "high_risk", "message": "Patient PAT-003 flagged high risk - physician notified", "priority": "high", "timestamp": datetime.now().isoformat(), "acknowledged": False},
-            {"id": "ALT-002", "type": "followup", "message": "Follow-up required for PAT-002 - BP check in 2 hours", "priority": "medium", "timestamp": datetime.now().isoformat(), "acknowledged": False},
-            {"id": "ALT-003", "type": "medication", "message": "PAT-004 medication due at 3:00 PM", "priority": "medium", "timestamp": datetime.now().isoformat(), "acknowledged": True},
-            {"id": "ALT-004", "type": "vitals", "message": "PAT-002 elevated temperature (100.4°F)", "priority": "high", "timestamp": datetime.now().isoformat(), "acknowledged": False},
+            {"id": "ALT-001", "type": "high_risk", "message": "[DEMO] Patient flagged high risk - physician notified", "priority": "high", "timestamp": datetime.now().isoformat(), "acknowledged": False, "is_demo": True},
+            {"id": "ALT-002", "type": "followup", "message": "[DEMO] Follow-up required - BP check in 2 hours", "priority": "medium", "timestamp": datetime.now().isoformat(), "acknowledged": False, "is_demo": True},
+            {"id": "ALT-003", "type": "medication", "message": "[DEMO] Medication due at 3:00 PM", "priority": "medium", "timestamp": datetime.now().isoformat(), "acknowledged": True, "is_demo": True},
+            {"id": "ALT-004", "type": "vitals", "message": "[DEMO] Elevated temperature (100.4°F)", "priority": "high", "timestamp": datetime.now().isoformat(), "acknowledged": False, "is_demo": True},
         ],
-        "total": 4
+        "total": 4,
+        "note": "Demo alerts shown. Real alerts generated from finalized encounters."
     }
 
 
