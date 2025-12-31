@@ -580,6 +580,22 @@ def init_database():
         )
     """)
     
+    # Seed default staff accounts if none exist
+    cursor.execute("SELECT COUNT(*) FROM staff_accounts")
+    if cursor.fetchone()[0] == 0:
+        default_pw = hash_password("demo123")
+        now = datetime.now().isoformat()
+        demo_accounts = [
+            ("doctor_DOC001", "doctor@biotek.health", default_pw, "doctor", "Dr. Sarah Smith", "EMP-DOC-001", "Internal Medicine", now, "system", 1),
+            ("nurse_NUR001", "nurse@biotek.health", default_pw, "nurse", "Emily Johnson RN", "EMP-NUR-001", "Patient Care", now, "system", 1),
+            ("researcher_RES001", "researcher@biotek.health", default_pw, "researcher", "Dr. Michael Chen", "EMP-RES-001", "Clinical Research", now, "system", 1),
+            ("receptionist_REC001", "receptionist@biotek.health", default_pw, "receptionist", "Lisa Martinez", "EMP-REC-001", "Front Desk", now, "system", 1),
+        ]
+        cursor.executemany("""
+            INSERT INTO staff_accounts (user_id, email, password_hash, role, full_name, employee_id, department, created_at, created_by, activated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, demo_accounts)
+    
     # Admin accounts (super users)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS admin_accounts (
