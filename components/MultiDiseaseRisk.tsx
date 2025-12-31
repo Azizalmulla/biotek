@@ -249,10 +249,11 @@ export default function MultiDiseaseRisk({
   const [geneticsImporting, setGeneticsImporting] = useState(false);
   const [useGeneticsInRisk, setUseGeneticsInRisk] = useState(true);
   
-  // Load genetic results when patient changes
+  // Load genetic results when patient changes (only if we have valid userId)
   useEffect(() => {
     const loadGeneticResults = async () => {
-      if (!patientId) {
+      // Don't fetch if no patient or no valid userId (avoid anonymous logs)
+      if (!patientId || !userId || userId === 'unknown') {
         setGeneticResults(null);
         return;
       }
@@ -261,7 +262,7 @@ export default function MultiDiseaseRisk({
         const response = await fetch(`${API_BASE}/patient/${patientId}/genetic-results`, {
           headers: {
             'X-User-ID': userId,
-            'X-User-Role': userRole,
+            'X-User-Role': userRole || 'doctor',
           },
         });
         if (response.ok) {
@@ -1743,7 +1744,7 @@ export default function MultiDiseaseRisk({
                     </button>
                     <button
                       onClick={async () => {
-                        if (!geneticsImportJson.trim() || !patientId) return;
+                        if (!geneticsImportJson.trim() || !patientId || !userId || userId === 'unknown') return;
                         setGeneticsImporting(true);
                         try {
                           const importData = JSON.parse(geneticsImportJson);
@@ -1751,7 +1752,7 @@ export default function MultiDiseaseRisk({
                             method: 'POST',
                             headers: {
                               'Content-Type': 'application/json',
-                              'X-User-ID': userId || 'unknown',
+                              'X-User-ID': userId,
                               'X-User-Role': userRole || 'doctor'
                             },
                             body: JSON.stringify(importData)
@@ -1760,7 +1761,7 @@ export default function MultiDiseaseRisk({
                             // Refresh genetic results
                             const refreshResponse = await fetch(`${API_BASE}/patient/${patientId}/genetic-results`, {
                               headers: {
-                                'X-User-ID': userId || 'unknown',
+                                'X-User-ID': userId,
                                 'X-User-Role': userRole || 'doctor'
                               }
                             });
