@@ -8473,14 +8473,15 @@ Only include diseases that have actual PRS data in the report. If a field is not
 Return ONLY the JSON, no markdown, no explanation."""
 
     try:
-        # Call GLM for extraction
-        glm_response = await call_glm_chat([
+        # Call GLM for extraction via OpenRouter
+        messages = [
             {"role": "system", "content": "You are a precise medical data extraction AI. Return only valid JSON."},
             {"role": "user", "content": extraction_prompt}
-        ], max_tokens=2000)
+        ]
+        glm_response = glm_client.vision._make_request(messages, reasoning=False)
         
         # Parse GLM response
-        response_text = glm_response.get("response", "{}")
+        response_text = glm_response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
         
         # Clean up response - remove markdown code blocks if present
         if "```json" in response_text:
