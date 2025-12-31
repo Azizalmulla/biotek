@@ -679,8 +679,8 @@ export default function MultiDiseaseRisk({
     
     setIsFinalizingEncounter(true);
     try {
-      // 1. Save prediction to encounter
-      await fetch(`${API_BASE}/encounters/${effectiveEncounterId}/prediction`, {
+      // 1. Save to legacy patient_prediction_results table (this is what patient dashboard reads)
+      const legacyResponse = await fetch(`${API_BASE}/patient/${effectivePatientId}/prediction-results`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -688,27 +688,49 @@ export default function MultiDiseaseRisk({
           'X-User-Role': userRole || 'doctor'
         },
         body: JSON.stringify({
-          patient_id: effectivePatientId,
           prediction: result,
-          visibility: 'patient_visible'
+          visibility: 'patient_visible',
+          finalized: true
         }),
       });
       
-      // 2. Mark encounter as completed
-      await fetch(`${API_BASE}/encounter/complete`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-User-ID': userId || 'unknown',
-          'X-User-Role': userRole || 'doctor'
-        },
-        body: JSON.stringify({
-          encounter_id: effectiveEncounterId
-        }),
-      });
+      if (legacyResponse.ok) {
+        console.log('[FINALIZED] Saved to legacy patient_prediction_results');
+      }
+      
+      // 2. Also try to save to encounter system (optional - may fail)
+      try {
+        await fetch(`${API_BASE}/encounters/${effectiveEncounterId}/prediction`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-User-ID': userId || 'unknown',
+            'X-User-Role': userRole || 'doctor'
+          },
+          body: JSON.stringify({
+            patient_id: effectivePatientId,
+            prediction: result,
+            visibility: 'patient_visible'
+          }),
+        });
+        
+        await fetch(`${API_BASE}/encounter/complete`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-User-ID': userId || 'unknown',
+            'X-User-Role': userRole || 'doctor'
+          },
+          body: JSON.stringify({
+            encounter_id: effectiveEncounterId
+          }),
+        });
+      } catch (e) {
+        console.log('[FINALIZED] Encounter system save failed (non-critical):', e);
+      }
       
       setIsFinalized(true);
-      console.log('[FINALIZED] Encounter completed and prediction saved:', effectiveEncounterId);
+      console.log('[FINALIZED] Assessment finalized for patient:', effectivePatientId);
       
       // Call parent callback if provided
       if (onFinalize) {
