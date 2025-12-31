@@ -7686,6 +7686,12 @@ async def add_patient_care_note(
 # ENCOUNTER MANAGEMENT - Links all diagnostic outputs together
 # =============================================================================
 
+@app.get("/encounters/test-endpoint")
+async def test_encounter_endpoint():
+    """Simple test to verify encounters endpoint is reachable"""
+    return {"status": "ok", "message": "Encounters endpoint is working", "timestamp": datetime.now().isoformat()}
+
+
 @app.post("/encounters/find-or-create-draft")
 async def find_or_create_draft_encounter(
     request: dict,
