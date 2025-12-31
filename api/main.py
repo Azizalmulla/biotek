@@ -1452,6 +1452,49 @@ async def debug_test_draft(request: dict):
         return {"error": str(e), "debug": results}
 
 
+@app.post("/debug/reset-demo-accounts")
+async def debug_reset_demo_accounts():
+    """TEMPORARY: Force reset demo account passwords"""
+    from database import execute_query
+    results = {"reset": []}
+    
+    try:
+        # Delete existing demo accounts and recreate them
+        demo_users = ["doctor_DOC001", "nurse_NUR001", "researcher_RES001", "receptionist_REC001"]
+        for user_id in demo_users:
+            execute_query("DELETE FROM staff_accounts WHERE user_id = ?", (user_id,))
+            results["reset"].append(f"deleted {user_id}")
+        
+        # Now insert fresh accounts
+        default_pw = hash_password("demo123")
+        now = datetime.now().isoformat()
+        demo_accounts = [
+            ("doctor_DOC001", "doctor@biotek.health", default_pw, "doctor", "Dr. Sarah Smith", "EMP-DOC-001", "Internal Medicine"),
+            ("nurse_NUR001", "nurse@biotek.health", default_pw, "nurse", "Emily Johnson RN", "EMP-NUR-001", "Patient Care"),
+            ("researcher_RES001", "researcher@biotek.health", default_pw, "researcher", "Dr. Michael Chen", "EMP-RES-001", "Clinical Research"),
+            ("receptionist_REC001", "receptionist@biotek.health", default_pw, "receptionist", "Lisa Martinez", "EMP-REC-001", "Front Desk"),
+        ]
+        for user_id, email, pwd_hash, role, full_name, emp_id, dept in demo_accounts:
+            execute_query("""
+                INSERT INTO staff_accounts (user_id, email, password_hash, role, full_name, employee_id, department, created_at, created_by, activated)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, true)
+            """, (user_id, email, pwd_hash, role, full_name, emp_id, dept, now, "system"))
+            results["reset"].append(f"created {user_id}")
+        
+        # Verify
+        test = execute_query("SELECT password_hash FROM staff_accounts WHERE user_id = ?", ("doctor_DOC001",), fetch='one')
+        if test:
+            results["verify_new_password"] = verify_password("demo123", test[0])
+        
+        results["status"] = "success"
+        results["message"] = "Demo accounts reset. Try logging in with demo123"
+        
+    except Exception as e:
+        results["error"] = str(e)
+    
+    return results
+
+
 @app.get("/debug/check-staff-accounts")
 async def debug_check_staff_accounts():
     """TEMPORARY: Debug staff accounts to find login issue"""
