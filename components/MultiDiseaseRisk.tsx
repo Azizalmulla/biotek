@@ -681,6 +681,7 @@ export default function MultiDiseaseRisk({
     setIsFinalizingEncounter(true);
     try {
       // 1. Save to legacy patient_prediction_results table (this is what patient dashboard reads)
+      // API expects prediction_data directly as body, not wrapped in { prediction: ... }
       const legacyResponse = await fetch(`${API_BASE}/patient/${effectivePatientId}/prediction-results`, {
         method: 'POST',
         headers: { 
@@ -688,11 +689,7 @@ export default function MultiDiseaseRisk({
           'X-User-ID': userId || 'unknown',
           'X-User-Role': userRole || 'doctor'
         },
-        body: JSON.stringify({
-          prediction: result,
-          visibility: 'patient_visible',
-          finalized: true
-        }),
+        body: JSON.stringify(result),
       });
       
       if (legacyResponse.ok) {
