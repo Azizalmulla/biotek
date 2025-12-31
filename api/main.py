@@ -471,43 +471,16 @@ async def load_model():
 
 
 def init_database():
-    """Initialize PostgreSQL database for audit logs and access control"""
-    # Use execute_query for PostgreSQL compatibility
+    """
+    Initialize database - tables are created by database.py
+    This function only seeds demo accounts
+    """
     try:
-        # Predictions table with access control fields
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS predictions (
-                id SERIAL PRIMARY KEY,
-                timestamp TEXT NOT NULL,
-                patient_id TEXT,
-                user_id TEXT,
-                user_role TEXT,
-                access_purpose TEXT,
-                input_data TEXT NOT NULL,
-                prediction REAL NOT NULL,
-                risk_category TEXT NOT NULL,
-                used_genetics INTEGER NOT NULL,
-                consent_id TEXT,
-                model_version TEXT NOT NULL
-            )
-        """)
-    
-        # Access log table for all data access attempts
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS access_log (
-                id SERIAL PRIMARY KEY,
-                timestamp TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                user_role TEXT NOT NULL,
-                purpose TEXT NOT NULL,
-                data_type TEXT NOT NULL,
-                patient_id TEXT,
-                granted INTEGER NOT NULL,
-                reason TEXT NOT NULL,
-                ip_address TEXT
-            )
-        """)
-    
+        # Tables are created by database.py on import - we only seed accounts here
+        
+        # Create additional tables not in database.py (for features added in main.py)
+        # These use CREATE TABLE IF NOT EXISTS so they're safe to run multiple times
+        
         # User sessions table
         execute_query("""
             CREATE TABLE IF NOT EXISTS user_sessions (
@@ -521,7 +494,7 @@ def init_database():
             )
         """)
         
-        # Patient accounts table
+        # Patient accounts table  
         execute_query("""
             CREATE TABLE IF NOT EXISTS patient_accounts (
                 patient_id TEXT PRIMARY KEY,
@@ -534,7 +507,7 @@ def init_database():
                 verification_token TEXT,
                 last_login TEXT,
                 failed_login_attempts INTEGER DEFAULT 0,
-                account_locked INTEGER DEFAULT 0,
+                locked_until TEXT,
                 deleted_at TEXT
             )
         """)
@@ -550,46 +523,6 @@ def init_database():
                 used INTEGER DEFAULT 0,
                 used_at TEXT,
                 expires_at TEXT NOT NULL
-            )
-        """)
-        
-        # Healthcare worker accounts
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS staff_accounts (
-                user_id TEXT PRIMARY KEY,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                role TEXT NOT NULL,
-                full_name TEXT NOT NULL,
-                employee_id TEXT UNIQUE NOT NULL,
-                department TEXT,
-                created_at TEXT NOT NULL,
-                created_by TEXT NOT NULL,
-                activated INTEGER DEFAULT 0,
-                activation_token TEXT,
-                last_login TEXT,
-                failed_login_attempts INTEGER DEFAULT 0,
-                account_locked INTEGER DEFAULT 0,
-                account_disabled INTEGER DEFAULT 0,
-                disabled_at TEXT,
-                disabled_by TEXT,
-                disabled_reason TEXT
-            )
-        """)
-        
-        # Admin accounts
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS admin_accounts (
-                admin_id TEXT PRIMARY KEY,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                full_name TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                last_login TEXT,
-                super_admin INTEGER DEFAULT 0,
-                two_factor_enabled INTEGER DEFAULT 0,
-                two_factor_secret TEXT,
-                backup_codes TEXT
             )
         """)
         
@@ -634,29 +567,6 @@ def init_database():
                 public_key TEXT,
                 created_at TEXT NOT NULL,
                 created_by TEXT
-            )
-        """)
-        
-        # Data exchange requests
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS data_exchange_requests (
-                exchange_id TEXT PRIMARY KEY,
-                patient_id TEXT NOT NULL,
-                requesting_institution TEXT NOT NULL,
-                sending_institution TEXT NOT NULL,
-                purpose TEXT NOT NULL,
-                categories TEXT NOT NULL,
-                status TEXT NOT NULL,
-                requested_by TEXT NOT NULL,
-                requested_at TEXT NOT NULL,
-                patient_consent_status TEXT,
-                patient_consent_at TEXT,
-                approved_by TEXT,
-                approved_at TEXT,
-                sent_at TEXT,
-                received_at TEXT,
-                expires_at TEXT,
-                denial_reason TEXT
             )
         """)
         
@@ -718,115 +628,6 @@ def init_database():
             )
         """)
         
-        # Patient clinical records
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS patient_records (
-                patient_id TEXT PRIMARY KEY,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                updated_by TEXT NOT NULL,
-                age INTEGER,
-                sex INTEGER,
-                bmi REAL,
-                bp_systolic INTEGER,
-                bp_diastolic INTEGER,
-                heart_rate INTEGER,
-                total_cholesterol REAL,
-                hdl REAL,
-                ldl REAL,
-                triglycerides REAL,
-                hba1c REAL,
-                fasting_glucose REAL,
-                egfr REAL,
-                smoking_pack_years REAL,
-                exercise_hours_weekly REAL,
-                has_diabetes INTEGER,
-                on_bp_medication INTEGER,
-                family_history_score INTEGER,
-                consent_given INTEGER DEFAULT 1,
-                data_retention_days INTEGER DEFAULT 365,
-                deletion_requested_at TEXT
-            )
-        """)
-        
-        # Patient data access audit
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS patient_data_audit (
-                id SERIAL PRIMARY KEY,
-                timestamp TEXT NOT NULL,
-                patient_id TEXT NOT NULL,
-                action TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                user_role TEXT NOT NULL,
-                details TEXT
-            )
-        """)
-        
-        # Patient prediction results
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS patient_prediction_results (
-                patient_id TEXT PRIMARY KEY,
-                updated_at TEXT NOT NULL,
-                created_by TEXT,
-                visibility TEXT DEFAULT 'patient_visible',
-                prediction_json TEXT NOT NULL,
-                patient_summary_json TEXT
-            )
-        """)
-        
-        # Patient variant analysis results
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS patient_variant_results (
-                id SERIAL PRIMARY KEY,
-                patient_id TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                created_by TEXT NOT NULL,
-                variant TEXT NOT NULL,
-                gene TEXT,
-                classification TEXT NOT NULL,
-                confidence REAL,
-                result_json TEXT NOT NULL
-            )
-        """)
-        
-        # Patient imaging results
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS patient_imaging_results (
-                id SERIAL PRIMARY KEY,
-                patient_id TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                created_by TEXT NOT NULL,
-                image_type TEXT NOT NULL,
-                finding_summary TEXT,
-                result_json TEXT NOT NULL
-            )
-        """)
-        
-        # Patient treatment protocols
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS patient_treatments (
-                id SERIAL PRIMARY KEY,
-                patient_id TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                created_by TEXT NOT NULL,
-                treatment_type TEXT NOT NULL,
-                protocol_summary TEXT,
-                result_json TEXT NOT NULL
-            )
-        """)
-        
-        # Patient clinical reasoning results
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS patient_clinical_reasoning (
-                id SERIAL PRIMARY KEY,
-                patient_id TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                created_by TEXT NOT NULL,
-                assessment_summary TEXT,
-                result_json TEXT NOT NULL
-            )
-        """)
-        
         # Chat history table
         execute_query("""
             CREATE TABLE IF NOT EXISTS chat_history (
@@ -838,40 +639,38 @@ def init_database():
             )
         """)
         
-        # Note: Schema is managed by database.py - no additional migrations needed here
-        
-        # Seed/update default admin account (upsert to fix existing account)
+        # Seed/update default admin account (upsert)
         default_password_hash = hash_password("BioTeK2024!")
         execute_query("""
             INSERT INTO admin_accounts (admin_id, email, password_hash, full_name, created_at, super_admin)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, true)
             ON CONFLICT (admin_id) DO UPDATE SET 
                 password_hash = EXCLUDED.password_hash,
                 super_admin = EXCLUDED.super_admin
-        """, ("admin", "admin@biotek.health", default_password_hash, "System Administrator", datetime.now().isoformat(), 1))
+        """, ("admin", "admin@biotek.health", default_password_hash, "System Administrator", datetime.now().isoformat()))
         
-        # Seed/update default staff accounts (upsert to fix existing accounts)
+        # Seed/update default staff accounts (upsert)
         default_pw = hash_password("demo123")
         now = datetime.now().isoformat()
         demo_accounts = [
-            ("doctor_DOC001", "doctor@biotek.health", default_pw, "doctor", "Dr. Sarah Smith", "EMP-DOC-001", "Internal Medicine", now, "system", True),
-            ("nurse_NUR001", "nurse@biotek.health", default_pw, "nurse", "Emily Johnson RN", "EMP-NUR-001", "Patient Care", now, "system", True),
-            ("researcher_RES001", "researcher@biotek.health", default_pw, "researcher", "Dr. Michael Chen", "EMP-RES-001", "Clinical Research", now, "system", True),
-            ("receptionist_REC001", "receptionist@biotek.health", default_pw, "receptionist", "Lisa Martinez", "EMP-REC-001", "Front Desk", now, "system", True),
+            ("doctor_DOC001", "doctor@biotek.health", default_pw, "doctor", "Dr. Sarah Smith", "EMP-DOC-001", "Internal Medicine"),
+            ("nurse_NUR001", "nurse@biotek.health", default_pw, "nurse", "Emily Johnson RN", "EMP-NUR-001", "Patient Care"),
+            ("researcher_RES001", "researcher@biotek.health", default_pw, "researcher", "Dr. Michael Chen", "EMP-RES-001", "Clinical Research"),
+            ("receptionist_REC001", "receptionist@biotek.health", default_pw, "receptionist", "Lisa Martinez", "EMP-REC-001", "Front Desk"),
         ]
-        for user_id, email, pwd_hash, role, full_name, emp_id, dept, created, created_by, activated in demo_accounts:
+        for user_id, email, pwd_hash, role, full_name, emp_id, dept in demo_accounts:
             execute_query("""
                 INSERT INTO staff_accounts (user_id, email, password_hash, role, full_name, employee_id, department, created_at, created_by, activated, failed_login_attempts)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'system', true, 0)
                 ON CONFLICT (user_id) DO UPDATE SET 
                     password_hash = EXCLUDED.password_hash,
-                    activated = EXCLUDED.activated,
+                    activated = true,
                     failed_login_attempts = 0,
                     locked_until = NULL
-            """, (user_id, email, pwd_hash, role, full_name, emp_id, dept, created, created_by, activated))
+            """, (user_id, email, pwd_hash, role, full_name, emp_id, dept, now))
         
-        print("✓ PostgreSQL database initialized with access control")
-        print("✓ Demo accounts created (password: demo123, admin: BioTeK2024!)")
+        print("✓ Database initialized - demo accounts ready")
+        print("✓ Staff: demo123 | Admin: BioTeK2024!")
         
     except Exception as e:
         print(f"Database initialization warning: {e}")
@@ -1826,7 +1625,7 @@ async def login_patient(request: PatientLoginRequest):
     try:
         # Get patient account
         result = execute_query("""
-            SELECT password_hash, email, verified, account_locked, 
+            SELECT password_hash, email, verified, locked_until, 
                    failed_login_attempts, deleted_at
             FROM patient_accounts
             WHERE patient_id = ?
@@ -1843,15 +1642,17 @@ async def login_patient(request: PatientLoginRequest):
             )
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        password_hash, email, verified, account_locked, failed_attempts, deleted_at = result
+        password_hash, email, verified, locked_until, failed_attempts, deleted_at = result
         
         # Check if account is deleted
         if deleted_at:
             raise HTTPException(status_code=403, detail="Account has been deleted")
         
         # Check if account is locked
-        if account_locked:
-            raise HTTPException(status_code=403, detail="Account is locked. Contact support.")
+        if locked_until:
+            lock_time = datetime.fromisoformat(locked_until)
+            if lock_time > datetime.now():
+                raise HTTPException(status_code=403, detail="Account is locked. Try again later.")
         
         # Verify password
         if not verify_password(request.password, password_hash):
@@ -1863,11 +1664,12 @@ async def login_patient(request: PatientLoginRequest):
             """, (new_failed_attempts, request.patient_id))
             
             if new_failed_attempts >= 5:
+                lock_time = (datetime.now() + timedelta(minutes=30)).isoformat()
                 execute_query("""
                     UPDATE patient_accounts 
-                    SET account_locked = 1
+                    SET locked_until = ?
                     WHERE patient_id = ?
-                """, (request.patient_id,))
+                """, (lock_time, request.patient_id))
                 raise HTTPException(status_code=403, detail="Account locked due to too many failed attempts")
             
             log_access_attempt(
@@ -2239,13 +2041,20 @@ async def get_staff_accounts(admin_id: str = Header(..., alias="X-Admin-ID")):
         # Get all staff accounts
         rows = execute_query("""
             SELECT user_id, email, role, full_name, employee_id, department,
-                   created_at, activated, account_locked, account_disabled, last_login
+                   created_at, activated, locked_until, last_login
             FROM staff_accounts
             ORDER BY created_at DESC
         """, (), fetch='all') or []
         
         accounts = []
         for row in rows:
+            # Check if account is currently locked
+            is_locked = False
+            if row[8]:  # locked_until
+                try:
+                    is_locked = datetime.fromisoformat(row[8]) > datetime.now()
+                except:
+                    pass
             accounts.append({
                 "user_id": row[0],
                 "email": row[1],
@@ -2255,9 +2064,8 @@ async def get_staff_accounts(admin_id: str = Header(..., alias="X-Admin-ID")):
                 "department": row[5],
                 "created_at": row[6],
                 "activated": bool(row[7]) if row[7] is not None else False,
-                "account_locked": bool(row[8]) if row[8] is not None else False,
-                "account_disabled": bool(row[9]) if row[9] is not None else False,
-                "last_login": row[10]
+                "account_locked": is_locked,
+                "last_login": row[9]
             })
         
         return {"staff_accounts": accounts, "total": len(accounts)}
@@ -2285,17 +2093,20 @@ async def update_staff_status(
         if not admin_check:
             raise HTTPException(status_code=403, detail="Unauthorized")
         
-        # Update staff account status
+        # Update staff account status using locked_until
         if request.disabled:
+            # Lock account indefinitely (far future date)
+            lock_until = "2099-12-31T23:59:59"
             execute_query("""
                 UPDATE staff_accounts
-                SET account_disabled = 1, disabled_at = ?, disabled_by = ?, disabled_reason = ?
+                SET locked_until = ?
                 WHERE user_id = ?
-            """, (datetime.now().isoformat(), admin_id, request.reason, request.user_id))
+            """, (lock_until, request.user_id))
         else:
+            # Unlock account
             execute_query("""
                 UPDATE staff_accounts
-                SET account_disabled = 0, disabled_at = NULL, disabled_by = NULL, disabled_reason = NULL
+                SET locked_until = NULL, failed_login_attempts = 0
                 WHERE user_id = ?
             """, (request.user_id,))
         
@@ -2417,7 +2228,7 @@ async def reset_password(request: PasswordResetConfirm):
         elif user_type == 'staff':
             execute_query("""
                 UPDATE staff_accounts
-                SET password_hash = ?, failed_login_attempts = 0, account_locked = 0
+                SET password_hash = ?, failed_login_attempts = 0, locked_until = NULL
                 WHERE email = ?
             """, (new_password_hash, email))
         elif user_type == 'admin':
