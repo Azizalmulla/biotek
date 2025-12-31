@@ -4040,36 +4040,58 @@ async def predict_multi_disease(
         'avg_glucose_level': hba1c_val * 20,
     }
     
-    # Key risk factors for display (using imputed values)
+    # Key risk factors for display with SHAP-like impact values
+    # Impact = estimated % contribution to risk, direction = risk/protective
+    def calc_impact(value, threshold, max_impact, inverse=False):
+        """Calculate impact based on how far value is from normal threshold"""
+        if inverse:  # Higher is better (e.g., HDL)
+            if value >= threshold:
+                return max_impact * 0.2  # Still some baseline
+            return max_impact * (1 - value / threshold)
+        else:  # Lower is better (e.g., LDL, BP)
+            if value <= threshold:
+                return max_impact * 0.2
+            return max_impact * min((value - threshold) / threshold, 1.5)
+    
     RISK_FACTORS = {
         "type2_diabetes": [
-            {"feature": "hba1c", "importance": 0.35, "value": hba1c_val},
-            {"feature": "bmi", "importance": 0.25, "value": patient.bmi},
-            {"feature": "age", "importance": 0.20, "value": patient.age},
+            {"feature": "hba1c", "importance": 0.35, "value": hba1c_val, "impact": calc_impact(hba1c_val, 5.7, 18), "direction": "risk"},
+            {"feature": "bmi", "importance": 0.25, "value": patient.bmi, "impact": calc_impact(patient.bmi, 25, 12), "direction": "risk"},
+            {"feature": "age", "importance": 0.20, "value": patient.age, "impact": calc_impact(patient.age, 45, 8), "direction": "risk"},
         ],
         "coronary_heart_disease": [
-            {"feature": "ldl", "importance": 0.30, "value": ldl_val},
-            {"feature": "bp_systolic", "importance": 0.25, "value": patient.bp_systolic},
-            {"feature": "age", "importance": 0.20, "value": patient.age},
+            {"feature": "ldl", "importance": 0.30, "value": ldl_val, "impact": calc_impact(ldl_val, 100, 15), "direction": "risk"},
+            {"feature": "bp_systolic", "importance": 0.25, "value": patient.bp_systolic, "impact": calc_impact(patient.bp_systolic, 120, 12), "direction": "risk"},
+            {"feature": "hdl", "importance": 0.20, "value": hdl_val, "impact": calc_impact(hdl_val, 60, 8, inverse=True), "direction": "protective" if hdl_val >= 50 else "risk"},
         ],
         "hypertension": [
-            {"feature": "bp_systolic", "importance": 0.40, "value": patient.bp_systolic},
-            {"feature": "bp_diastolic", "importance": 0.30, "value": patient.bp_diastolic},
-            {"feature": "bmi", "importance": 0.15, "value": patient.bmi},
+            {"feature": "bp_systolic", "importance": 0.40, "value": patient.bp_systolic, "impact": calc_impact(patient.bp_systolic, 120, 20), "direction": "risk"},
+            {"feature": "bp_diastolic", "importance": 0.30, "value": patient.bp_diastolic, "impact": calc_impact(patient.bp_diastolic, 80, 15), "direction": "risk"},
+            {"feature": "bmi", "importance": 0.15, "value": patient.bmi, "impact": calc_impact(patient.bmi, 25, 10), "direction": "risk"},
         ],
         "stroke": [
-            {"feature": "bp_systolic", "importance": 0.35, "value": patient.bp_systolic},
-            {"feature": "age", "importance": 0.30, "value": patient.age},
-            {"feature": "smoking", "importance": 0.20, "value": smoking_val},
+            {"feature": "bp_systolic", "importance": 0.35, "value": patient.bp_systolic, "impact": calc_impact(patient.bp_systolic, 120, 18), "direction": "risk"},
+            {"feature": "age", "importance": 0.30, "value": patient.age, "impact": calc_impact(patient.age, 55, 12), "direction": "risk"},
+            {"feature": "smoking", "importance": 0.20, "value": smoking_val, "impact": smoking_val * 2.5 if smoking_val > 0 else 0, "direction": "risk"},
         ],
         "copd": [
-            {"feature": "smoking", "importance": 0.80, "value": smoking_val},
-            {"feature": "age", "importance": 0.15, "value": patient.age},
+            {"feature": "smoking", "importance": 0.80, "value": smoking_val, "impact": smoking_val * 4 if smoking_val > 0 else 0, "direction": "risk"},
+            {"feature": "age", "importance": 0.15, "value": patient.age, "impact": calc_impact(patient.age, 50, 8), "direction": "risk"},
+        ],
+        "chronic_kidney_disease": [
+            {"feature": "bp_systolic", "importance": 0.35, "value": patient.bp_systolic, "impact": calc_impact(patient.bp_systolic, 130, 15), "direction": "risk"},
+            {"feature": "hba1c", "importance": 0.30, "value": hba1c_val, "impact": calc_impact(hba1c_val, 6.0, 12), "direction": "risk"},
+            {"feature": "age", "importance": 0.20, "value": patient.age, "impact": calc_impact(patient.age, 60, 8), "direction": "risk"},
+        ],
+        "alzheimers": [
+            {"feature": "age", "importance": 0.40, "value": patient.age, "impact": calc_impact(patient.age, 65, 20), "direction": "risk"},
+            {"feature": "family_history", "importance": 0.25, "value": family_hx_val, "impact": family_hx_val * 8, "direction": "risk"},
+            {"feature": "exercise", "importance": 0.15, "value": exercise_val, "impact": 6 if exercise_val < 2 else 0, "direction": "protective" if exercise_val >= 3 else "risk"},
         ],
         "default": [
-            {"feature": "age", "importance": 0.30, "value": patient.age},
-            {"feature": "bmi", "importance": 0.25, "value": patient.bmi},
-            {"feature": "bp_systolic", "importance": 0.20, "value": patient.bp_systolic},
+            {"feature": "age", "importance": 0.30, "value": patient.age, "impact": calc_impact(patient.age, 50, 10), "direction": "risk"},
+            {"feature": "bmi", "importance": 0.25, "value": patient.bmi, "impact": calc_impact(patient.bmi, 25, 8), "direction": "risk"},
+            {"feature": "bp_systolic", "importance": 0.20, "value": patient.bp_systolic, "impact": calc_impact(patient.bp_systolic, 120, 6), "direction": "risk"},
         ]
     }
     
@@ -8395,6 +8417,130 @@ async def update_genetic_consent(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update consent: {str(e)}")
+
+
+@app.post("/patient/{patient_id}/genetic-results/parse-report")
+async def parse_genetic_lab_report(
+    patient_id: str,
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """
+    Parse a genetic lab report using GLM to extract PRS and variant data.
+    Accepts file content (base64 or text) and uses AI to extract structured data.
+    Doctor reviews extracted data before confirming import.
+    """
+    if user_role.lower() not in ['doctor', 'admin']:
+        raise HTTPException(status_code=403, detail="Only doctors can parse genetic reports")
+    
+    file_content = request.get("file_content", "")  # Base64 or raw text
+    file_type = request.get("file_type", "text")  # text, csv, pdf_text
+    file_name = request.get("file_name", "unknown")
+    
+    if not file_content:
+        raise HTTPException(status_code=400, detail="No file content provided")
+    
+    # Build prompt for GLM to extract genetic data
+    extraction_prompt = f"""You are a clinical genetics data extraction specialist. 
+Extract polygenic risk score (PRS) data from this genetic lab report.
+
+REPORT CONTENT:
+{file_content[:8000]}
+
+Extract and return ONLY a valid JSON object with this exact structure:
+{{
+    "lab_name": "Name of the genetic testing laboratory",
+    "test_date": "YYYY-MM-DD format if found, or empty string",
+    "report_id": "Report/accession number if found, or empty string",
+    "prs": {{
+        "coronary_heart_disease": {{ "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" }},
+        "type2_diabetes": {{ "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" }},
+        "hypertension": {{ "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" }},
+        "breast_cancer": {{ "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" }},
+        "alzheimers": {{ "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" }}
+    }},
+    "high_impact_variants": {{
+        "apoe_status": "e2/e2, e2/e3, e3/e3, e2/e4, e3/e4, or e4/e4 if found",
+        "brca1": "positive/negative/not_tested",
+        "brca2": "positive/negative/not_tested"
+    }},
+    "extraction_confidence": "high/medium/low",
+    "notes": "Any important notes about data quality or missing fields"
+}}
+
+Only include diseases that have actual PRS data in the report. If a field is not found, omit it or use null.
+Return ONLY the JSON, no markdown, no explanation."""
+
+    try:
+        # Call GLM for extraction
+        glm_response = await call_glm_chat([
+            {"role": "system", "content": "You are a precise medical data extraction AI. Return only valid JSON."},
+            {"role": "user", "content": extraction_prompt}
+        ], max_tokens=2000)
+        
+        # Parse GLM response
+        response_text = glm_response.get("response", "{}")
+        
+        # Clean up response - remove markdown code blocks if present
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0]
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0]
+        
+        try:
+            extracted_data = json.loads(response_text.strip())
+        except json.JSONDecodeError:
+            # Try to find JSON in response
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                extracted_data = json.loads(json_match.group())
+            else:
+                extracted_data = {"error": "Failed to parse GLM response", "raw": response_text[:500]}
+        
+        # Add RR calculations to extracted PRS
+        prs_with_rr = {}
+        for disease, data in extracted_data.get("prs", {}).items():
+            if data and isinstance(data, dict) and "percentile" in data:
+                percentile = data.get("percentile", 50)
+                prs_with_rr[disease] = {
+                    **data,
+                    "relative_risk": prs_percentile_to_rr(percentile),
+                    "risk_band": "high" if percentile >= 80 else "average" if percentile >= 20 else "low"
+                }
+        
+        # Log the parsing attempt
+        log_access_attempt(
+            user_id=user_id,
+            role=user_role,
+            purpose="genetics_parse",
+            data_type="genetic_report",
+            patient_id=patient_id,
+            granted=True,
+            reason=f"Parsed genetic report: {file_name}"
+        )
+        
+        return {
+            "status": "parsed",
+            "patient_id": patient_id,
+            "file_name": file_name,
+            "extracted_data": {
+                "lab_name": extracted_data.get("lab_name", "Unknown Lab"),
+                "test_date": extracted_data.get("test_date", ""),
+                "report_id": extracted_data.get("report_id", ""),
+                "prs": prs_with_rr,
+                "high_impact_variants": extracted_data.get("high_impact_variants", {}),
+                "extraction_confidence": extracted_data.get("extraction_confidence", "medium"),
+                "notes": extracted_data.get("notes", "")
+            },
+            "requires_confirmation": True,
+            "message": "Review extracted data and confirm to import"
+        }
+        
+    except Exception as e:
+        print(f"[GENETICS] Parse error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to parse genetic report: {str(e)}")
 
 
 @app.post("/encounters/{encounter_id}/imaging")

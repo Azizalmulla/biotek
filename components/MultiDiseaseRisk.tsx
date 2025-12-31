@@ -248,6 +248,7 @@ export default function MultiDiseaseRisk({
   const [geneticsImportJson, setGeneticsImportJson] = useState('');
   const [geneticsImporting, setGeneticsImporting] = useState(false);
   const [useGeneticsInRisk, setUseGeneticsInRisk] = useState(true);
+  const [parsedGeneticsPreview, setParsedGeneticsPreview] = useState<any>(null);
   
   // Load genetic results when patient changes (only if we have valid userId)
   useEffect(() => {
@@ -1702,106 +1703,224 @@ export default function MultiDiseaseRisk({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* No genetic data message */}
-                  <div className="p-6 bg-stone-100 border border-stone-200 rounded-xl text-center">
-                    <div className="text-4xl mb-3">🧬</div>
-                    <div className="text-lg font-medium text-black mb-2">No Genetic Data on File</div>
-                    <div className="text-sm text-black/60 mb-4">
-                      Genetic testing results can be imported from external labs.
-                    </div>
-                  </div>
+                  {/* No genetic data - File Upload Interface */}
+                  {!parsedGeneticsPreview ? (
+                    <>
+                      <div className="p-6 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl text-center">
+                        <div className="text-4xl mb-3">📄</div>
+                        <div className="text-lg font-medium text-black mb-2">Upload Genetic Lab Report</div>
+                        <div className="text-sm text-black/60 mb-4">
+                          Upload a PDF, CSV, or text file from any genetic testing lab.<br/>
+                          Our AI will extract PRS data automatically.
+                        </div>
+                        
+                        {/* File Upload Area */}
+                        <label className="block cursor-pointer">
+                          <div className="border-2 border-dashed border-purple-300 rounded-xl p-8 hover:border-purple-500 hover:bg-purple-50/50 transition-all">
+                            <input
+                              type="file"
+                              accept=".pdf,.csv,.txt,.json"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file || !patientId || !userId) return;
+                                
+                                setGeneticsImporting(true);
+                                try {
+                                  // Read file content
+                                  const reader = new FileReader();
+                                  reader.onload = async (event) => {
+                                    const content = event.target?.result as string;
+                                    
+                                    // Send to GLM for parsing
+                                    const response = await fetch(`${API_BASE}/patient/${patientId}/genetic-results/parse-report`, {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-User-ID': userId,
+                                        'X-User-Role': userRole || 'doctor'
+                                      },
+                                      body: JSON.stringify({
+                                        file_content: content,
+                                        file_type: file.name.endsWith('.csv') ? 'csv' : file.name.endsWith('.json') ? 'json' : 'text',
+                                        file_name: file.name
+                                      })
+                                    });
+                                    
+                                    if (response.ok) {
+                                      const data = await response.json();
+                                      setParsedGeneticsPreview(data.extracted_data);
+                                    } else {
+                                      console.error('Failed to parse report');
+                                    }
+                                    setGeneticsImporting(false);
+                                  };
+                                  reader.readAsText(file);
+                                } catch (err) {
+                                  console.error('File read error:', err);
+                                  setGeneticsImporting(false);
+                                }
+                              }}
+                            />
+                            {geneticsImporting ? (
+                              <div className="flex flex-col items-center gap-2">
+                                <div className="w-8 h-8 border-3 border-purple-300 border-t-purple-600 rounded-full animate-spin" />
+                                <span className="text-purple-700 font-medium">AI is extracting genetic data...</span>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="text-3xl mb-2">📁</div>
+                                <div className="text-purple-700 font-medium">Click to upload or drag & drop</div>
+                                <div className="text-xs text-purple-500 mt-1">PDF, CSV, TXT, JSON • Max 10MB</div>
+                              </>
+                            )}
+                          </div>
+                        </label>
+                      </div>
 
-                  {/* Import Section */}
-                  <div className="p-4 bg-white/50 border border-stone-200 rounded-xl">
-                    <div className="text-sm font-medium text-black mb-3">Import Lab Results (JSON)</div>
-                    <textarea
-                      value={geneticsImportJson}
-                      onChange={(e) => setGeneticsImportJson(e.target.value)}
-                      placeholder={`{
-  "lab_name": "Clinical Genetics Lab",
-  "test_date": "2025-12-15",
-  "report_id": "RPT-001234",
-  "results": {
-    "prs": {
-      "coronary_heart_disease": { "percentile": 85, "ancestry": "EUR" },
-      "type2_diabetes": { "percentile": 42, "ancestry": "EUR" }
-    },
-    "high_impact_variants": {
-      "apoe_status": "e3/e4"
-    }
-  }
-}`}
-                      className="w-full h-40 p-3 bg-white rounded-xl border border-stone-200 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
+                      <button
+                        onClick={() => setShowGeneticsModal(false)}
+                        className="w-full py-3 rounded-xl border border-black/20 text-black/60 hover:bg-black/5"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {/* Preview Extracted Data */}
+                      <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-xl">✅</span>
+                          <div>
+                            <div className="font-medium text-green-900">Data Extracted Successfully</div>
+                            <div className="text-xs text-green-700">
+                              Confidence: {parsedGeneticsPreview.extraction_confidence || 'medium'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setShowGeneticsModal(false)}
-                      className="flex-1 py-3 rounded-xl border border-black/20 text-black/60 hover:bg-black/5"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (!geneticsImportJson.trim() || !patientId || !userId || userId === 'unknown') return;
-                        setGeneticsImporting(true);
-                        try {
-                          const importData = JSON.parse(geneticsImportJson);
-                          const response = await fetch(`${API_BASE}/patient/${patientId}/genetic-results/import`, {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                              'X-User-ID': userId,
-                              'X-User-Role': userRole || 'doctor'
-                            },
-                            body: JSON.stringify(importData)
-                          });
-                          if (response.ok) {
-                            // Refresh genetic results
-                            const refreshResponse = await fetch(`${API_BASE}/patient/${patientId}/genetic-results`, {
-                              headers: {
-                                'X-User-ID': userId,
-                                'X-User-Role': userRole || 'doctor'
-                              }
-                            });
-                            if (refreshResponse.ok) {
-                              const data = await refreshResponse.json();
-                              setGeneticResults(data);
-                            }
-                            setGeneticsImportJson('');
-                          }
-                        } catch (e) {
-                          console.error('Failed to import genetics:', e);
-                        } finally {
-                          setGeneticsImporting(false);
-                        }
-                      }}
-                      disabled={!geneticsImportJson.trim() || geneticsImporting}
-                      className={`flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 ${
-                        !geneticsImportJson.trim() || geneticsImporting
-                          ? 'bg-black/10 text-black/40'
-                          : 'bg-purple-600 text-white hover:bg-purple-700'
-                      }`}
-                    >
-                      {geneticsImporting ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Importing...
-                        </>
-                      ) : (
-                        <>🧬 Import Results</>
+                      {/* Lab Info */}
+                      <div className="p-4 bg-white/50 border border-stone-200 rounded-xl">
+                        <div className="text-sm font-medium text-black mb-2">Lab Information</div>
+                        <div className="text-sm text-black/70 space-y-1">
+                          <div><strong>Lab:</strong> {parsedGeneticsPreview.lab_name || 'Unknown'}</div>
+                          <div><strong>Date:</strong> {parsedGeneticsPreview.test_date || 'Not specified'}</div>
+                          <div><strong>Report ID:</strong> {parsedGeneticsPreview.report_id || 'Not specified'}</div>
+                        </div>
+                      </div>
+
+                      {/* Extracted PRS */}
+                      {parsedGeneticsPreview.prs && Object.keys(parsedGeneticsPreview.prs).length > 0 && (
+                        <div className="p-4 bg-white/50 border border-stone-200 rounded-xl">
+                          <div className="text-sm font-medium text-black mb-3">Extracted Polygenic Risk Scores</div>
+                          <div className="space-y-2">
+                            {Object.entries(parsedGeneticsPreview.prs).map(([disease, data]: [string, any]) => (
+                              <div key={disease} className="flex items-center justify-between p-2 bg-stone-50 rounded-lg">
+                                <span className="text-sm capitalize">{disease.replace(/_/g, ' ')}</span>
+                                <div className="text-right">
+                                  <span className="font-bold">{data.percentile}th</span>
+                                  <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                                    data.risk_band === 'high' ? 'bg-red-100 text-red-700' :
+                                    data.risk_band === 'low' ? 'bg-green-100 text-green-700' :
+                                    'bg-stone-100 text-stone-700'
+                                  }`}>
+                                    RR: {data.relative_risk}x
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
-                    </button>
-                  </div>
 
-                  {/* Request Testing Placeholder */}
-                  <div className="text-center pt-4 border-t border-stone-200">
-                    <div className="text-xs text-black/40 mb-2">Or request genetic testing</div>
-                    <button className="text-sm text-purple-600 hover:text-purple-700 font-medium">
-                      📋 Order Genetic Panel →
-                    </button>
-                  </div>
+                      {/* High Impact Variants */}
+                      {parsedGeneticsPreview.high_impact_variants && Object.keys(parsedGeneticsPreview.high_impact_variants).length > 0 && (
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                          <div className="text-sm font-medium text-amber-900 mb-2">High-Impact Variants</div>
+                          <div className="space-y-1 text-sm">
+                            {Object.entries(parsedGeneticsPreview.high_impact_variants).map(([variant, value]: [string, any]) => (
+                              <div key={variant} className="flex justify-between">
+                                <span className="capitalize">{variant.replace(/_/g, ' ')}</span>
+                                <span className="font-medium">{value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Notes */}
+                      {parsedGeneticsPreview.notes && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
+                          <strong>Notes:</strong> {parsedGeneticsPreview.notes}
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setParsedGeneticsPreview(null)}
+                          className="flex-1 py-3 rounded-xl border border-black/20 text-black/60 hover:bg-black/5"
+                        >
+                          ← Back
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!patientId || !userId) return;
+                            setGeneticsImporting(true);
+                            try {
+                              // Import the confirmed data
+                              const response = await fetch(`${API_BASE}/patient/${patientId}/genetic-results/import`, {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'X-User-ID': userId,
+                                  'X-User-Role': userRole || 'doctor'
+                                },
+                                body: JSON.stringify({
+                                  lab_name: parsedGeneticsPreview.lab_name,
+                                  test_date: parsedGeneticsPreview.test_date,
+                                  report_id: parsedGeneticsPreview.report_id,
+                                  results: {
+                                    prs: Object.fromEntries(
+                                      Object.entries(parsedGeneticsPreview.prs || {}).map(([k, v]: [string, any]) => [k, { percentile: v.percentile, ancestry: v.ancestry }])
+                                    ),
+                                    high_impact_variants: parsedGeneticsPreview.high_impact_variants
+                                  }
+                                })
+                              });
+                              
+                              if (response.ok) {
+                                // Refresh and close
+                                const refreshResponse = await fetch(`${API_BASE}/patient/${patientId}/genetic-results`, {
+                                  headers: { 'X-User-ID': userId, 'X-User-Role': userRole || 'doctor' }
+                                });
+                                if (refreshResponse.ok) {
+                                  setGeneticResults(await refreshResponse.json());
+                                }
+                                setParsedGeneticsPreview(null);
+                              }
+                            } catch (e) {
+                              console.error('Import failed:', e);
+                            } finally {
+                              setGeneticsImporting(false);
+                            }
+                          }}
+                          disabled={geneticsImporting}
+                          className="flex-1 py-3 rounded-xl font-medium bg-green-600 text-white hover:bg-green-700 flex items-center justify-center gap-2"
+                        >
+                          {geneticsImporting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>✓ Confirm & Import</>
+                          )}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </motion.div>
