@@ -329,12 +329,34 @@ export default function PatientDashboard() {
                             </div>
                           )}
                           
+                          {/* Genetics Contribution - Patient-Safe View */}
+                          {pred.genetic_rr && pred.genetic_rr !== 1.0 && (
+                            <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-purple-500">🧬</span>
+                                <span className="text-sm font-medium text-purple-900">Genetic factors considered</span>
+                              </div>
+                              <p className="text-xs text-purple-700">
+                                Your genetic profile was included in this risk estimate. 
+                                {pred.genetic_rr > 1.0 
+                                  ? ' Your genetics suggest a somewhat elevated baseline risk for this condition.'
+                                  : ' Your genetics suggest a somewhat lower baseline risk for this condition.'}
+                              </p>
+                              {pred.prs_percentile && (
+                                <p className="text-xs text-purple-600 mt-1">
+                                  Genetic risk score: {pred.prs_percentile < 30 ? 'Lower than average' : 
+                                    pred.prs_percentile < 70 ? 'Average range' : 'Higher than average'}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          
                           {/* Key Info Grid */}
                           <div className="flex flex-wrap gap-4 text-sm mb-4">
                             <div className="flex items-center gap-2">
                               <span className="text-black/40">🧬</span>
                               <span className="text-black/60">Genetic data:</span>
-                              <span className="font-medium">{pred.used_genetics ? 'Included' : 'Not included'}</span>
+                              <span className="font-medium">{pred.genetic_rr && pred.genetic_rr !== 1.0 ? 'Included' : 'Not included'}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-black/40">📅</span>
