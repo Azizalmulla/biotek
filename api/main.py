@@ -5031,10 +5031,10 @@ async def get_access_logs(limit: int = 50, user_id: Optional[str] = None, role: 
     Retrieve access control logs showing who accessed what data for what purpose
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
+        ph = get_placeholder()
         
-        query = """
+        # Build query with proper placeholders
+        base_query = """
             SELECT id, timestamp, user_id, user_role, purpose, data_type, 
                    patient_id, granted, reason
             FROM access_log
@@ -5044,22 +5044,20 @@ async def get_access_logs(limit: int = 50, user_id: Optional[str] = None, role: 
         params = []
         
         if user_id:
-            conditions.append("user_id = ?")
+            conditions.append(f"user_id = {ph}")
             params.append(user_id)
         
         if role:
-            conditions.append("user_role = ?")
+            conditions.append(f"user_role = {ph}")
             params.append(role)
         
         if conditions:
-            query += " WHERE " + " AND ".join(conditions)
+            base_query += " WHERE " + " AND ".join(conditions)
         
-        query += " ORDER BY timestamp DESC LIMIT ?"
+        base_query += f" ORDER BY timestamp DESC LIMIT {ph}"
         params.append(limit)
         
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        conn.close()
+        rows = execute_query(base_query, tuple(params), fetch='all') or []
         
         logs = []
         for row in rows:
@@ -5071,7 +5069,7 @@ async def get_access_logs(limit: int = 50, user_id: Optional[str] = None, role: 
                 "purpose": row[4],
                 "data_type": row[5],
                 "patient_id": row[6],
-                "granted": bool(row[7]),
+                "granted": bool(row[7]) if row[7] is not None else False,
                 "reason": row[8]
             })
         
