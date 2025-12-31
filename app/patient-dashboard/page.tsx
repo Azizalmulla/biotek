@@ -16,6 +16,7 @@ export default function PatientDashboard() {
   const [activeTab, setActiveTab] = useState<'predictions' | 'mydata' | 'consent' | 'access'>('predictions');
   const [loading, setLoading] = useState(true);
   const [clinicalData, setClinicalData] = useState<any>(null);
+  const [finalizedEncounters, setFinalizedEncounters] = useState<any[]>([]);
 
   useEffect(() => {
     // Check if user is logged in as patient
@@ -104,6 +105,20 @@ export default function PatientDashboard() {
       }
     } catch (error) {
       console.error('Failed to load clinical data:', error);
+    }
+
+    // Load finalized encounters (clinician-reviewed assessments)
+    try {
+      const response = await fetch(`${API_BASE}/patients/${patientId}/encounters`, {
+        headers: {
+          'X-User-ID': patientId,
+          'X-User-Role': 'patient'
+        }
+      });
+      const data = await response.json();
+      setFinalizedEncounters(data.encounters || []);
+    } catch (error) {
+      console.error('Failed to load encounters:', error);
     }
 
     setLoading(false);
@@ -268,6 +283,48 @@ export default function PatientDashboard() {
               className="bg-white/80 backdrop-blur-md rounded-3xl p-8"
             >
               <h2 className="text-2xl font-bold text-black mb-6">My Clinical Data</h2>
+              
+              {/* Finalized Assessments Section */}
+              {finalizedEncounters.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+                    <span>✅</span> Finalized Assessments
+                  </h3>
+                  <div className="space-y-3">
+                    {finalizedEncounters.map((enc: any) => (
+                      <div key={enc.encounter_id} className="p-4 bg-green-50 border border-green-200 rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">📋</span>
+                            <div>
+                              <div className="font-medium text-green-900">
+                                {enc.encounter_type === 'risk_assessment' ? 'Risk Assessment' : enc.encounter_type}
+                              </div>
+                              <div className="text-sm text-green-700">
+                                Reviewed by {enc.created_by_role} • {new Date(enc.completed_at || enc.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="px-3 py-1 bg-green-600 text-white text-xs font-medium rounded-full">
+                            Finalized
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {finalizedEncounters.length === 0 && (
+                <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-500">📝</span>
+                    <span className="text-sm text-amber-800">
+                      No finalized assessments yet. Your clinician will complete and finalize assessments during your visits.
+                    </span>
+                  </div>
+                </div>
+              )}
               
               {clinicalData ? (
                 <div className="space-y-6">

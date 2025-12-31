@@ -8071,13 +8071,25 @@ async def get_patient_encounters(
     user_id: str = Header("anonymous", alias="X-User-ID")
 ):
     """Get all encounters for a patient"""
-    if user_role.lower() not in ['doctor', 'nurse', 'admin']:
-        raise HTTPException(status_code=403, detail="Only clinical staff can view patient encounters")
+    role_lower = user_role.lower()
+    is_patient = role_lower == 'patient'
+    is_own_data = user_id == patient_id
+    
+    # Patients can only view their own finalized encounters
+    if is_patient:
+        if not is_own_data:
+            raise HTTPException(status_code=403, detail="Patients can only view their own encounters")
+        # Patients only see COMPLETED encounters
+        status_filter = "AND status = 'completed'"
+    elif role_lower in ['doctor', 'nurse', 'admin']:
+        status_filter = ""  # Clinical staff see all
+    else:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     try:
-        encounters = execute_query("""
+        encounters = execute_query(f"""
             SELECT encounter_id, created_by, created_by_role, created_at, encounter_type, status, completed_at
-            FROM encounters WHERE patient_id = ? ORDER BY created_at DESC
+            FROM encounters WHERE patient_id = ? {status_filter} ORDER BY created_at DESC
         """, (patient_id,), fetch='all') or []
         
         return {
