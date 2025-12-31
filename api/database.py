@@ -437,19 +437,7 @@ def init_postgres_tables():
                 )
             """)
             
-            # Insert demo staff account if not exists
-            cursor.execute("""
-                INSERT INTO staff_accounts (user_id, email, password_hash, role, full_name, created_at, activated)
-                VALUES ('doctor_DOC001', 'doctor@biotek.demo', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.rMvvlRQFVpLpGy', 'doctor', 'Demo Doctor', '2025-01-01', TRUE)
-                ON CONFLICT (user_id) DO NOTHING
-            """)
-            
-            # Insert demo admin account if not exists
-            cursor.execute("""
-                INSERT INTO admin_accounts (admin_id, email, password_hash, full_name, created_at, super_admin)
-                VALUES ('admin_ADM001', 'admin@biotek.demo', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.rMvvlRQFVpLpGy', 'Demo Admin', '2025-01-01', TRUE)
-                ON CONFLICT (admin_id) DO NOTHING
-            """)
+            # Demo accounts are seeded by main.py init_database() with proper password hashing
             
             conn.commit()
             print("✓ PostgreSQL tables initialized")
@@ -620,17 +608,7 @@ def init_sqlite_tables():
         )
     """)
     
-    # Insert demo staff account
-    cursor.execute("""
-        INSERT OR IGNORE INTO staff_accounts (user_id, email, password_hash, role, full_name, created_at, activated)
-        VALUES ('doctor_DOC001', 'doctor@biotek.demo', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.rMvvlRQFVpLpGy', 'doctor', 'Demo Doctor', '2025-01-01', 1)
-    """)
-    
-    # Insert demo admin account
-    cursor.execute("""
-        INSERT OR IGNORE INTO admin_accounts (admin_id, email, password_hash, full_name, created_at, super_admin)
-        VALUES ('admin_ADM001', 'admin@biotek.demo', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.rMvvlRQFVpLpGy', 'Demo Admin', '2025-01-01', 1)
-    """)
+    # Demo accounts are seeded by main.py init_database() with proper password hashing
     
     conn.commit()
     conn.close()

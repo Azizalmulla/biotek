@@ -1978,7 +1978,7 @@ async def login_staff(request: StaffLoginRequest):
         # Reset failed attempts and update last login
         execute_query("""
             UPDATE staff_accounts
-            SET failed_login_attempts = 0, last_login = ?, activated = 1
+            SET failed_login_attempts = 0, last_login = ?, activated = true
             WHERE user_id = ?
         """, (datetime.now().isoformat(), request.user_id))
         
