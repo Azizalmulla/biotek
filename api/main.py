@@ -8435,75 +8435,79 @@ async def parse_genetic_lab_report(
         raise HTTPException(status_code=403, detail="Only doctors can parse genetic reports")
     
     file_content = request.get("file_content", "")  # Base64 or raw text
-    file_type = request.get("file_type", "text")  # text, csv, pdf_base64
+    file_type = request.get("file_type", "text")  # text, csv, visual_base64
     file_name = request.get("file_name", "unknown")
+    mime_type = request.get("mime_type", "application/octet-stream")
     
     if not file_content:
         raise HTTPException(status_code=400, detail="No file content provided")
     
-    # Handle PDF base64 - decode and extract text
-    if file_type == "pdf_base64":
-        try:
-            import base64
-            pdf_bytes = base64.b64decode(file_content)
-            # Try to extract text from PDF using simple method
-            # Look for text between stream/endstream or just decode readable parts
-            try:
-                # Try PyPDF2 if available
-                import io
-                from PyPDF2 import PdfReader
-                pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
-                extracted_text = ""
-                for page in pdf_reader.pages:
-                    extracted_text += page.extract_text() + "\n"
-                file_content = extracted_text if extracted_text.strip() else "PDF content could not be extracted"
-            except ImportError:
-                # Fallback: extract any readable ASCII from PDF
-                file_content = pdf_bytes.decode('latin-1', errors='ignore')
-                # Filter to printable characters
-                file_content = ''.join(c for c in file_content if c.isprintable() or c in '\n\t ')
-            file_type = "text"
-        except Exception as pdf_err:
-            print(f"[GENETICS] PDF decode error: {pdf_err}")
-            file_content = "Failed to decode PDF content"
+    # Visual content (PDF, DOCX, images) goes directly to GLM vision
+    is_visual_content = file_type in ["visual_base64", "pdf_base64"]
+    
+    # Determine proper MIME type for data URL
+    if is_visual_content:
+        # Map file extensions to MIME types for GLM vision
+        ext = file_name.lower().split('.')[-1] if '.' in file_name else ''
+        mime_map = {
+            'pdf': 'application/pdf',
+            'png': 'image/png',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'webp': 'image/webp',
+            'heic': 'image/heic',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'doc': 'application/msword'
+        }
+        mime_type = mime_map.get(ext, mime_type)
     
     # Build prompt for GLM to extract genetic data
-    extraction_prompt = f"""You are a clinical genetics data extraction specialist. 
+    extraction_prompt = """You are a clinical genetics data extraction specialist. 
 Extract polygenic risk score (PRS) data from this genetic lab report.
 
-REPORT CONTENT:
-{file_content[:8000]}
-
 Extract and return ONLY a valid JSON object with this exact structure:
-{{
+{
     "lab_name": "Name of the genetic testing laboratory",
     "test_date": "YYYY-MM-DD format if found, or empty string",
     "report_id": "Report/accession number if found, or empty string",
-    "prs": {{
-        "coronary_heart_disease": {{ "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" }},
-        "type2_diabetes": {{ "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" }},
-        "hypertension": {{ "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" }},
-        "breast_cancer": {{ "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" }},
-        "alzheimers": {{ "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" }}
-    }},
-    "high_impact_variants": {{
+    "prs": {
+        "coronary_heart_disease": { "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" },
+        "type2_diabetes": { "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" },
+        "hypertension": { "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" },
+        "breast_cancer": { "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" },
+        "alzheimers": { "percentile": 0-100, "ancestry": "EUR/AFR/EAS/SAS/AMR" }
+    },
+    "high_impact_variants": {
         "apoe_status": "e2/e2, e2/e3, e3/e3, e2/e4, e3/e4, or e4/e4 if found",
         "brca1": "positive/negative/not_tested",
         "brca2": "positive/negative/not_tested"
-    }},
+    },
     "extraction_confidence": "high/medium/low",
     "notes": "Any important notes about data quality or missing fields"
-}}
+}
 
 Only include diseases that have actual PRS data in the report. If a field is not found, omit it or use null.
 Return ONLY the JSON, no markdown, no explanation."""
 
     try:
-        # Call GLM for extraction via OpenRouter
-        messages = [
-            {"role": "system", "content": "You are a precise medical data extraction AI. Return only valid JSON."},
-            {"role": "user", "content": extraction_prompt}
-        ]
+        # Call GLM for extraction - use vision for images/PDFs
+        if is_visual_content:
+            # Send as multimodal message with image/document
+            messages = [
+                {"role": "system", "content": "You are a precise medical data extraction AI. Return only valid JSON."},
+                {"role": "user", "content": [
+                    {"type": "text", "text": extraction_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{file_content}"}}
+                ]}
+            ]
+        else:
+            # Text content - include in prompt
+            full_prompt = f"{extraction_prompt}\n\nREPORT CONTENT:\n{file_content[:8000]}"
+            messages = [
+                {"role": "system", "content": "You are a precise medical data extraction AI. Return only valid JSON."},
+                {"role": "user", "content": full_prompt}
+            ]
+        
         glm_response = glm_client.vision._make_request(messages, reasoning=False)
         
         # Parse GLM response

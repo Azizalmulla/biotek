@@ -1710,7 +1710,7 @@ export default function MultiDiseaseRisk({
                         <div className="text-4xl mb-3">📄</div>
                         <div className="text-lg font-medium text-black mb-2">Upload Genetic Lab Report</div>
                         <div className="text-sm text-black/60 mb-4">
-                          Upload a PDF, CSV, or text file from any genetic testing lab.<br/>
+                          Upload any file from your genetic testing lab.<br/>
                           Our AI will extract PRS data automatically.
                         </div>
                         
@@ -1719,7 +1719,7 @@ export default function MultiDiseaseRisk({
                           <div className="border-2 border-dashed border-purple-300 rounded-xl p-8 hover:border-purple-500 hover:bg-purple-50/50 transition-all">
                             <input
                               type="file"
-                              accept=".pdf,.csv,.txt,.json"
+                              accept=".pdf,.csv,.txt,.json,.docx,.doc,.png,.jpg,.jpeg,.webp,.heic"
                               className="hidden"
                               onChange={async (e) => {
                                 const file = e.target.files?.[0];
@@ -1731,15 +1731,19 @@ export default function MultiDiseaseRisk({
                                   reader.onload = async (event) => {
                                     let content = event.target?.result as string;
                                     let fileType = 'text';
+                                    const fileName = file.name.toLowerCase();
                                     
-                                    // Determine file type
-                                    if (file.name.endsWith('.pdf')) {
-                                      fileType = 'pdf_base64';
-                                      // For PDF, content is already base64 from readAsDataURL
-                                      content = content.split(',')[1] || content; // Remove data:application/pdf;base64, prefix
-                                    } else if (file.name.endsWith('.csv')) {
+                                    // Determine file type - visual formats go to GLM vision
+                                    const visualFormats = ['.pdf', '.docx', '.doc', '.png', '.jpg', '.jpeg', '.webp', '.heic'];
+                                    const isVisual = visualFormats.some(ext => fileName.endsWith(ext));
+                                    
+                                    if (isVisual) {
+                                      fileType = 'visual_base64';
+                                      // Extract base64 from dataURL
+                                      content = content.split(',')[1] || content;
+                                    } else if (fileName.endsWith('.csv')) {
                                       fileType = 'csv';
-                                    } else if (file.name.endsWith('.json')) {
+                                    } else if (fileName.endsWith('.json')) {
                                       fileType = 'json';
                                     }
                                     
@@ -1754,7 +1758,8 @@ export default function MultiDiseaseRisk({
                                       body: JSON.stringify({
                                         file_content: content,
                                         file_type: fileType,
-                                        file_name: file.name
+                                        file_name: file.name,
+                                        mime_type: file.type
                                       })
                                     });
                                     
@@ -1764,16 +1769,18 @@ export default function MultiDiseaseRisk({
                                     } else {
                                       const errData = await response.json().catch(() => ({}));
                                       console.error('Failed to parse report:', errData);
-                                      alert('Failed to parse report. Please try a different file format (CSV or TXT recommended).');
+                                      alert('Failed to parse report. Our AI will try to extract data from any format.');
                                     }
                                     setGeneticsImporting(false);
                                   };
                                   
-                                  // Use appropriate reader method based on file type
-                                  if (file.name.endsWith('.pdf')) {
-                                    reader.readAsDataURL(file); // Read PDF as base64
+                                  // Visual formats read as base64, text formats as text
+                                  const fileName = file.name.toLowerCase();
+                                  const visualFormats = ['.pdf', '.docx', '.doc', '.png', '.jpg', '.jpeg', '.webp', '.heic'];
+                                  if (visualFormats.some(ext => fileName.endsWith(ext))) {
+                                    reader.readAsDataURL(file);
                                   } else {
-                                    reader.readAsText(file); // Read text files as text
+                                    reader.readAsText(file);
                                   }
                                 } catch (err) {
                                   console.error('File read error:', err);
@@ -1790,7 +1797,7 @@ export default function MultiDiseaseRisk({
                               <>
                                 <div className="text-3xl mb-2">📁</div>
                                 <div className="text-purple-700 font-medium">Click to upload or drag & drop</div>
-                                <div className="text-xs text-purple-500 mt-1">PDF, CSV, TXT, JSON • Max 10MB</div>
+                                <div className="text-xs text-purple-500 mt-1">PDF, DOCX, Images, CSV, TXT • Any format</div>
                               </>
                             )}
                           </div>
