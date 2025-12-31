@@ -7967,12 +7967,13 @@ async def find_or_create_draft_encounter(
     - Otherwise create new draft encounter
     - Once encounter is 'completed', it's frozen - new runs create new draft
     """
+    # Validate inputs - return JSON error instead of raising HTTPException (CORS-safe)
     if user_role.lower() not in ['doctor', 'nurse', 'admin']:
-        raise HTTPException(status_code=403, detail="Only clinical staff can create encounters")
+        return {"error": "Only clinical staff can create encounters", "status": "forbidden"}
     
     patient_id = request.get("patient_id")
     if not patient_id:
-        raise HTTPException(status_code=400, detail="patient_id is required")
+        return {"error": "patient_id is required", "status": "bad_request"}
     
     encounter_type = request.get("encounter_type", "risk_assessment")
     
