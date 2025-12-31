@@ -7693,10 +7693,9 @@ async def test_encounter_endpoint():
 
 
 @app.post("/encounters/draft")
-async def create_draft_simple(request: Request):
-    """Simplified draft creation - bypasses complex logic"""
+async def create_draft_simple(body: dict):
+    """Simplified draft creation - uses dict body instead of Request"""
     try:
-        body = await request.json()
         patient_id = body.get("patient_id", "unknown")
         encounter_id = f"ENC-{uuid.uuid4().hex[:12].upper()}"
         return {
@@ -7711,22 +7710,23 @@ async def create_draft_simple(request: Request):
 
 
 @app.post("/encounters/find-or-create-draft")
-async def find_or_create_draft_encounter(request: Request):
+async def find_or_create_draft_encounter(
+    body: dict,
+    user_role: str = Header(default="doctor", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
     """Create draft encounter - simplified version"""
     try:
-        body = await request.json()
         patient_id = body.get("patient_id", "unknown")
         encounter_id = f"ENC-{uuid.uuid4().hex[:12].upper()}"
         timestamp = datetime.now().isoformat()
         
         # Try to save to database (optional - works without it)
         try:
-            user_role = request.headers.get("X-User-Role", "doctor")
-            user_id = request.headers.get("X-User-ID", "anonymous")
             execute_query("""
                 INSERT INTO encounters (encounter_id, patient_id, created_by, created_by_role, created_at, encounter_type, status, notes)
                 VALUES (?, ?, ?, ?, ?, 'risk_assessment', 'draft', '')
-            """, (encounter_id, patient_id, user_id, user_role, timestamp))
+            """, (encounter_id, patient_id, user_id or "anonymous", user_role or "doctor", timestamp))
         except:
             pass  # Database save is optional
         
