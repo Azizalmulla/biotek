@@ -6712,15 +6712,36 @@ async def get_patient_prediction_results(
             )
         
         ph = get_placeholder()
+        
+        # Query FINALIZED encounter predictions (not drafts)
+        # Join encounters to filter by status = 'completed'
         query = f"""
-            SELECT prediction_json, patient_summary_json, updated_at, visibility, created_by 
-            FROM patient_prediction_results 
-            WHERE patient_id = {ph}
+            SELECT ep.prediction_json, ep.patient_summary_json, ep.created_at, ep.visibility, ep.created_by,
+                   e.encounter_id, e.status
+            FROM encounter_predictions ep
+            JOIN encounters e ON ep.encounter_id = e.encounter_id
+            WHERE ep.patient_id = {ph} AND e.status = 'completed'
+            ORDER BY ep.created_at DESC
+            LIMIT 1
         """
         row = execute_query(query, (patient_id,), fetch='one')
         
+        # Fallback to legacy table if no finalized encounters
+        if not row:
+            query = f"""
+                SELECT prediction_json, patient_summary_json, updated_at, visibility, created_by 
+                FROM patient_prediction_results 
+                WHERE patient_id = {ph}
+            """
+            row = execute_query(query, (patient_id,), fetch='one')
+        
         if row:
-            prediction_json, patient_summary_json, updated_at, visibility, created_by = row
+            # Handle both new (7 cols) and legacy (5 cols) query results
+            if len(row) == 7:
+                prediction_json, patient_summary_json, updated_at, visibility, created_by, encounter_id, status = row
+            else:
+                prediction_json, patient_summary_json, updated_at, visibility, created_by = row
+                encounter_id, status = None, None
             
             # Patient role: return sanitized summary only (if visible)
             if is_patient:

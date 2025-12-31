@@ -96,6 +96,8 @@ interface MultiDiseaseRiskProps {
   userId?: string;
   userRole?: string;
   encounterId?: string | null;
+  encounterStatus?: 'draft' | 'finalized';  // NEW: Control persistence behavior
+  onFinalize?: (predictionData: PredictionResult) => Promise<void>;  // NEW: Callback when user finalizes
 }
 
 const DEFAULT_FORM_DATA = {
@@ -123,9 +125,12 @@ export default function MultiDiseaseRisk({
   patientId, 
   userId = 'unknown',
   userRole = 'doctor',
-  encounterId: initialEncounterId
+  encounterId: initialEncounterId,
+  encounterStatus = 'draft',
+  onFinalize
 }: MultiDiseaseRiskProps = {}) {
   const [currentEncounterId, setCurrentEncounterId] = useState<string | null>(initialEncounterId || null);
+  const [isFinalized, setIsFinalized] = useState(encounterStatus === 'finalized');
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
   
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -326,8 +331,10 @@ export default function MultiDiseaseRisk({
       // Save patient data after successful prediction
       await savePatientData();
       
-      // Save prediction results to ENCOUNTER (not legacy patient table)
-      if (patientId && encounterId) {
+      // DRAFT MODE: Do NOT persist predictions - keep in memory only
+      // Predictions are only saved when encounter is FINALIZED
+      if (patientId && encounterId && isFinalized) {
+        // Only save if already finalized (re-run on finalized encounter)
         try {
           await fetch(`${API_BASE}/encounters/${encounterId}/prediction`, {
             method: 'POST',
@@ -342,10 +349,12 @@ export default function MultiDiseaseRisk({
               visibility: 'patient_visible'
             }),
           });
-          console.log('[ENCOUNTER] Prediction saved to encounter:', encounterId);
+          console.log('[ENCOUNTER] Prediction saved to finalized encounter:', encounterId);
         } catch (e) {
           console.log('Failed to save prediction to encounter:', e);
         }
+      } else {
+        console.log('[DRAFT] Prediction computed but NOT saved - awaiting finalization');
       }
       
       if (onPredictionComplete) {
@@ -643,6 +652,59 @@ export default function MultiDiseaseRisk({
 
   const EXAMPLE_DNA = 'ATGCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG';
 
+  // Handle finalize - save prediction once and mark encounter as completed
+  const [isFinalizingEncounter, setIsFinalizingEncounter] = useState(false);
+  
+  const handleFinalizeEncounter = async () => {
+    if (!result || !patientId || !currentEncounterId) {
+      console.error('Cannot finalize: missing result, patientId, or encounterId');
+      return;
+    }
+    
+    setIsFinalizingEncounter(true);
+    try {
+      // 1. Save prediction to encounter
+      await fetch(`${API_BASE}/encounters/${currentEncounterId}/prediction`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-User-ID': userId || 'unknown',
+          'X-User-Role': userRole || 'doctor'
+        },
+        body: JSON.stringify({
+          patient_id: patientId,
+          prediction: result,
+          visibility: 'patient_visible'
+        }),
+      });
+      
+      // 2. Mark encounter as completed
+      await fetch(`${API_BASE}/encounter/complete`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-User-ID': userId || 'unknown',
+          'X-User-Role': userRole || 'doctor'
+        },
+        body: JSON.stringify({
+          encounter_id: currentEncounterId
+        }),
+      });
+      
+      setIsFinalized(true);
+      console.log('[FINALIZED] Encounter completed and prediction saved:', currentEncounterId);
+      
+      // Call parent callback if provided
+      if (onFinalize) {
+        await onFinalize(result);
+      }
+    } catch (error) {
+      console.error('Failed to finalize encounter:', error);
+    } finally {
+      setIsFinalizingEncounter(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header with Privacy Badge */}
@@ -921,6 +983,46 @@ export default function MultiDiseaseRisk({
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
+            {/* Encounter Status Banner */}
+            <div className={`rounded-2xl p-4 border ${isFinalized ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{isFinalized ? '✅' : '📝'}</span>
+                  <div>
+                    <div className={`font-semibold ${isFinalized ? 'text-green-900' : 'text-amber-900'}`}>
+                      {isFinalized ? 'Assessment Finalized' : 'Draft Assessment'}
+                    </div>
+                    <div className={`text-sm ${isFinalized ? 'text-green-700' : 'text-amber-700'}`}>
+                      {isFinalized 
+                        ? 'This assessment has been saved and is visible to the patient.' 
+                        : 'Preview only. Click "Finalize Assessment" to save and make visible to patient.'}
+                    </div>
+                  </div>
+                </div>
+                {!isFinalized && patientId && currentEncounterId && (
+                  <motion.button
+                    onClick={handleFinalizeEncounter}
+                    disabled={isFinalizingEncounter}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="px-6 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isFinalizingEncounter ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Finalizing...
+                      </>
+                    ) : (
+                      <>
+                        <span>✓</span>
+                        Finalize Assessment
+                      </>
+                    )}
+                  </motion.button>
+                )}
+              </div>
+            </div>
+
             {/* Multi-Modal Analysis Indicator */}
             {(result as any).multi_modal && (
               <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-2xl p-4 border border-purple-200">
