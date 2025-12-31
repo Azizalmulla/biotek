@@ -7693,11 +7693,7 @@ async def test_encounter_endpoint():
 
 
 @app.post("/encounters/find-or-create-draft")
-async def find_or_create_draft_encounter(
-    request: dict,
-    user_role: Optional[str] = Header(default="doctor", alias="X-User-Role"),
-    user_id: Optional[str] = Header(default="anonymous", alias="X-User-ID")
-):
+async def find_or_create_draft_encounter(request: Request):
     """
     Find existing DRAFT encounter for patient, or create new one.
     This enables the draft-upsert + finalize-lock workflow.
@@ -7707,6 +7703,11 @@ async def find_or_create_draft_encounter(
     - Once encounter is 'completed', it's frozen - new runs create new draft
     """
     try:
+        # Parse request body and headers manually
+        body = await request.json()
+        user_role = request.headers.get("X-User-Role", "doctor")
+        user_id = request.headers.get("X-User-ID", "anonymous")
+        
         # Validate inputs - return JSON error instead of raising HTTPException (CORS-safe)
         role = (user_role or "doctor").lower()
         uid = user_id or "anonymous"
@@ -7714,11 +7715,11 @@ async def find_or_create_draft_encounter(
         if role not in ['doctor', 'nurse', 'admin']:
             return {"error": "Only clinical staff can create encounters", "status": "forbidden"}
         
-        patient_id = request.get("patient_id")
+        patient_id = body.get("patient_id")
         if not patient_id:
             return {"error": "patient_id is required", "status": "bad_request"}
         
-        encounter_type = request.get("encounter_type", "risk_assessment")
+        encounter_type = body.get("encounter_type", "risk_assessment")
         
         # Try to find existing draft encounter for this patient
         existing = None
@@ -7803,9 +7804,8 @@ async def find_or_create_draft_encounter(
         # Catch-all for any unexpected errors
         return {
             "error": f"Internal error: {str(outer_e)}",
-            "status": "error",
             "encounter_id": f"ENC-FALLBACK-{uuid.uuid4().hex[:8].upper()}",
-            "patient_id": request.get("patient_id", "unknown"),
+            "patient_id": "unknown",
             "created_at": datetime.now().isoformat(),
             "status": "draft",
             "reused": False
@@ -7813,13 +7813,9 @@ async def find_or_create_draft_encounter(
 
 
 @app.post("/encounters/create")
-async def create_encounter(
-    request: dict,
-    user_role: str = Header("doctor", alias="X-User-Role"),
-    user_id: str = Header("anonymous", alias="X-User-ID")
-):
+async def create_encounter(request: Request):
     """Legacy endpoint - redirects to find-or-create-draft"""
-    return await find_or_create_draft_encounter(request, user_role, user_id)
+    return await find_or_create_draft_encounter(request)
 
 
 @app.post("/encounters/{encounter_id}/prediction")
