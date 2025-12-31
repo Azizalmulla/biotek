@@ -33,7 +33,7 @@ from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
-import sqlite3
+# sqlite3 import removed - using PostgreSQL via execute_query
 import os
 import json
 import secrets
@@ -471,435 +471,424 @@ async def load_model():
 
 
 def init_database():
-    """Initialize SQLite database for audit logs and access control"""
-    DB_PATH.parent.mkdir(exist_ok=True)
+    """Initialize PostgreSQL database for audit logs and access control"""
+    # Use execute_query for PostgreSQL compatibility
+    try:
+        # Predictions table with access control fields
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS predictions (
+                id SERIAL PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                patient_id TEXT,
+                user_id TEXT,
+                user_role TEXT,
+                access_purpose TEXT,
+                input_data TEXT NOT NULL,
+                prediction REAL NOT NULL,
+                risk_category TEXT NOT NULL,
+                used_genetics INTEGER NOT NULL,
+                consent_id TEXT,
+                model_version TEXT NOT NULL
+            )
+        """)
     
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+        # Access log table for all data access attempts
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS access_log (
+                id SERIAL PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                user_role TEXT NOT NULL,
+                purpose TEXT NOT NULL,
+                data_type TEXT NOT NULL,
+                patient_id TEXT,
+                granted INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                ip_address TEXT
+            )
+        """)
     
-    # Predictions table with access control fields
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS predictions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            patient_id TEXT,
-            user_id TEXT,
-            user_role TEXT,
-            access_purpose TEXT,
-            input_data TEXT NOT NULL,
-            prediction REAL NOT NULL,
-            risk_category TEXT NOT NULL,
-            used_genetics INTEGER NOT NULL,
-            consent_id TEXT,
-            model_version TEXT NOT NULL
-        )
-    """)
-    
-    # Access log table for all data access attempts
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS access_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            user_id TEXT NOT NULL,
-            user_role TEXT NOT NULL,
-            purpose TEXT NOT NULL,
-            data_type TEXT NOT NULL,
-            patient_id TEXT,
-            granted INTEGER NOT NULL,
-            reason TEXT NOT NULL,
-            ip_address TEXT
-        )
-    """)
-    
-    # User sessions table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user_sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT UNIQUE NOT NULL,
-            user_id TEXT NOT NULL,
-            user_role TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            expires_at TEXT NOT NULL,
-            active INTEGER DEFAULT 1
-        )
-    """)
-    
-    # Patient accounts table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patient_accounts (
-            patient_id TEXT PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            mrn_encrypted TEXT NOT NULL,
-            date_of_birth TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            verified INTEGER DEFAULT 0,
-            verification_token TEXT,
-            last_login TEXT,
-            failed_login_attempts INTEGER DEFAULT 0,
-            account_locked INTEGER DEFAULT 0,
-            deleted_at TEXT
-        )
-    """)
-    
-    # Patient verification codes (optional codes from doctors)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS verification_codes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT UNIQUE NOT NULL,
-            patient_id TEXT,
-            created_by TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            used INTEGER DEFAULT 0,
-            used_at TEXT,
-            expires_at TEXT NOT NULL
-        )
-    """)
-    
-    # Healthcare worker accounts
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS staff_accounts (
-            user_id TEXT PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL,
-            full_name TEXT NOT NULL,
-            employee_id TEXT UNIQUE NOT NULL,
-            department TEXT,
-            created_at TEXT NOT NULL,
-            created_by TEXT NOT NULL,
-            activated INTEGER DEFAULT 0,
-            activation_token TEXT,
-            last_login TEXT,
-            failed_login_attempts INTEGER DEFAULT 0,
-            account_locked INTEGER DEFAULT 0,
-            account_disabled INTEGER DEFAULT 0,
-            disabled_at TEXT,
-            disabled_by TEXT,
-            disabled_reason TEXT
-        )
-    """)
-    
-    # Seed default staff accounts if none exist
-    cursor.execute("SELECT COUNT(*) FROM staff_accounts")
-    if cursor.fetchone()[0] == 0:
-        default_pw = hash_password("demo123")
-        now = datetime.now().isoformat()
-        demo_accounts = [
-            ("doctor_DOC001", "doctor@biotek.health", default_pw, "doctor", "Dr. Sarah Smith", "EMP-DOC-001", "Internal Medicine", now, "system", 1),
-            ("nurse_NUR001", "nurse@biotek.health", default_pw, "nurse", "Emily Johnson RN", "EMP-NUR-001", "Patient Care", now, "system", 1),
-            ("researcher_RES001", "researcher@biotek.health", default_pw, "researcher", "Dr. Michael Chen", "EMP-RES-001", "Clinical Research", now, "system", 1),
-            ("receptionist_REC001", "receptionist@biotek.health", default_pw, "receptionist", "Lisa Martinez", "EMP-REC-001", "Front Desk", now, "system", 1),
+        # User sessions table
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id SERIAL PRIMARY KEY,
+                session_id TEXT UNIQUE NOT NULL,
+                user_id TEXT NOT NULL,
+                user_role TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                active INTEGER DEFAULT 1
+            )
+        """)
+        
+        # Patient accounts table
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS patient_accounts (
+                patient_id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                mrn_encrypted TEXT NOT NULL,
+                date_of_birth TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                verified INTEGER DEFAULT 0,
+                verification_token TEXT,
+                last_login TEXT,
+                failed_login_attempts INTEGER DEFAULT 0,
+                account_locked INTEGER DEFAULT 0,
+                deleted_at TEXT
+            )
+        """)
+        
+        # Patient verification codes
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS verification_codes (
+                id SERIAL PRIMARY KEY,
+                code TEXT UNIQUE NOT NULL,
+                patient_id TEXT,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                used INTEGER DEFAULT 0,
+                used_at TEXT,
+                expires_at TEXT NOT NULL
+            )
+        """)
+        
+        # Healthcare worker accounts
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS staff_accounts (
+                user_id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                employee_id TEXT UNIQUE NOT NULL,
+                department TEXT,
+                created_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                activated INTEGER DEFAULT 0,
+                activation_token TEXT,
+                last_login TEXT,
+                failed_login_attempts INTEGER DEFAULT 0,
+                account_locked INTEGER DEFAULT 0,
+                account_disabled INTEGER DEFAULT 0,
+                disabled_at TEXT,
+                disabled_by TEXT,
+                disabled_reason TEXT
+            )
+        """)
+        
+        # Admin accounts
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS admin_accounts (
+                admin_id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                last_login TEXT,
+                super_admin INTEGER DEFAULT 0,
+                two_factor_enabled INTEGER DEFAULT 0,
+                two_factor_secret TEXT,
+                backup_codes TEXT
+            )
+        """)
+        
+        # Staff account audit log
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS staff_account_audit (
+                id SERIAL PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                admin_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                user_id TEXT,
+                details TEXT,
+                ip_address TEXT
+            )
+        """)
+        
+        # Password reset tokens
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id SERIAL PRIMARY KEY,
+                token TEXT UNIQUE NOT NULL,
+                email TEXT NOT NULL,
+                user_type TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                used INTEGER DEFAULT 0,
+                used_at TEXT
+            )
+        """)
+        
+        # Healthcare institutions registry
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS institutions (
+                institution_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL,
+                address TEXT,
+                contact_email TEXT,
+                contact_phone TEXT,
+                verified INTEGER DEFAULT 0,
+                active INTEGER DEFAULT 1,
+                public_key TEXT,
+                created_at TEXT NOT NULL,
+                created_by TEXT
+            )
+        """)
+        
+        # Data exchange requests
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS data_exchange_requests (
+                exchange_id TEXT PRIMARY KEY,
+                patient_id TEXT NOT NULL,
+                requesting_institution TEXT NOT NULL,
+                sending_institution TEXT NOT NULL,
+                purpose TEXT NOT NULL,
+                categories TEXT NOT NULL,
+                status TEXT NOT NULL,
+                requested_by TEXT NOT NULL,
+                requested_at TEXT NOT NULL,
+                patient_consent_status TEXT,
+                patient_consent_at TEXT,
+                approved_by TEXT,
+                approved_at TEXT,
+                sent_at TEXT,
+                received_at TEXT,
+                expires_at TEXT,
+                denial_reason TEXT
+            )
+        """)
+        
+        # Data exchange logs
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS data_exchange_logs (
+                id SERIAL PRIMARY KEY,
+                exchange_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                details TEXT,
+                user_id TEXT,
+                timestamp TEXT NOT NULL,
+                ip_address TEXT
+            )
+        """)
+        
+        # Patient sharing consents
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS sharing_consents (
+                id SERIAL PRIMARY KEY,
+                patient_id TEXT NOT NULL,
+                institution_id TEXT NOT NULL,
+                consent_given INTEGER DEFAULT 0,
+                granted_at TEXT,
+                revoked INTEGER DEFAULT 0,
+                revoked_at TEXT,
+                expires_at TEXT,
+                purpose TEXT,
+                data_categories TEXT
+            )
+        """)
+        
+        # Patient data share links
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS patient_share_links (
+                share_token TEXT PRIMARY KEY,
+                patient_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                access_count INTEGER DEFAULT 0,
+                max_accesses INTEGER DEFAULT 1,
+                revoked INTEGER DEFAULT 0,
+                format TEXT NOT NULL,
+                recipient_email TEXT
+            )
+        """)
+        
+        # Patient data download requests
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS patient_data_requests (
+                id SERIAL PRIMARY KEY,
+                patient_id TEXT NOT NULL,
+                request_type TEXT NOT NULL,
+                format TEXT NOT NULL,
+                requested_at TEXT NOT NULL,
+                fulfilled_at TEXT,
+                delivery_method TEXT,
+                status TEXT NOT NULL
+            )
+        """)
+        
+        # Patient clinical records
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS patient_records (
+                patient_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                updated_by TEXT NOT NULL,
+                age INTEGER,
+                sex INTEGER,
+                bmi REAL,
+                bp_systolic INTEGER,
+                bp_diastolic INTEGER,
+                heart_rate INTEGER,
+                total_cholesterol REAL,
+                hdl REAL,
+                ldl REAL,
+                triglycerides REAL,
+                hba1c REAL,
+                fasting_glucose REAL,
+                egfr REAL,
+                smoking_pack_years REAL,
+                exercise_hours_weekly REAL,
+                has_diabetes INTEGER,
+                on_bp_medication INTEGER,
+                family_history_score INTEGER,
+                consent_given INTEGER DEFAULT 1,
+                data_retention_days INTEGER DEFAULT 365,
+                deletion_requested_at TEXT
+            )
+        """)
+        
+        # Patient data access audit
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS patient_data_audit (
+                id SERIAL PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                patient_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                user_role TEXT NOT NULL,
+                details TEXT
+            )
+        """)
+        
+        # Patient prediction results
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS patient_prediction_results (
+                patient_id TEXT PRIMARY KEY,
+                updated_at TEXT NOT NULL,
+                created_by TEXT,
+                visibility TEXT DEFAULT 'patient_visible',
+                prediction_json TEXT NOT NULL,
+                patient_summary_json TEXT
+            )
+        """)
+        
+        # Patient variant analysis results
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS patient_variant_results (
+                id SERIAL PRIMARY KEY,
+                patient_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                variant TEXT NOT NULL,
+                gene TEXT,
+                classification TEXT NOT NULL,
+                confidence REAL,
+                result_json TEXT NOT NULL
+            )
+        """)
+        
+        # Patient imaging results
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS patient_imaging_results (
+                id SERIAL PRIMARY KEY,
+                patient_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                image_type TEXT NOT NULL,
+                finding_summary TEXT,
+                result_json TEXT NOT NULL
+            )
+        """)
+        
+        # Patient treatment protocols
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS patient_treatments (
+                id SERIAL PRIMARY KEY,
+                patient_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                treatment_type TEXT NOT NULL,
+                protocol_summary TEXT,
+                result_json TEXT NOT NULL
+            )
+        """)
+        
+        # Patient clinical reasoning results
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS patient_clinical_reasoning (
+                id SERIAL PRIMARY KEY,
+                patient_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                assessment_summary TEXT,
+                result_json TEXT NOT NULL
+            )
+        """)
+        
+        # Chat history table
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS chat_history (
+                id SERIAL PRIMARY KEY,
+                session_id TEXT,
+                patient_id TEXT,
+                messages TEXT,
+                updated_at TEXT
+            )
+        """)
+        
+        # Add missing columns to staff_accounts if they don't exist (migration)
+        migration_columns = [
+            ("staff_accounts", "account_locked", "INTEGER DEFAULT 0"),
+            ("staff_accounts", "account_disabled", "INTEGER DEFAULT 0"),
+            ("staff_accounts", "failed_login_attempts", "INTEGER DEFAULT 0"),
+            ("staff_accounts", "disabled_at", "TEXT"),
+            ("staff_accounts", "disabled_by", "TEXT"),
+            ("staff_accounts", "disabled_reason", "TEXT"),
+            ("staff_accounts", "activation_token", "TEXT"),
+            ("staff_accounts", "last_login", "TEXT"),
+            ("admin_accounts", "two_factor_enabled", "INTEGER DEFAULT 0"),
+            ("admin_accounts", "two_factor_secret", "TEXT"),
+            ("admin_accounts", "backup_codes", "TEXT"),
         ]
-        cursor.executemany("""
-            INSERT INTO staff_accounts (user_id, email, password_hash, role, full_name, employee_id, department, created_at, created_by, activated)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, demo_accounts)
-    
-    # Admin accounts (super users)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS admin_accounts (
-            admin_id TEXT PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            full_name TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            last_login TEXT,
-            super_admin INTEGER DEFAULT 0,
-            two_factor_enabled INTEGER DEFAULT 0,
-            two_factor_secret TEXT,
-            backup_codes TEXT
-        )
-    """)
-    
-    # Seed default admin account if none exists
-    cursor.execute("SELECT COUNT(*) FROM admin_accounts")
-    if cursor.fetchone()[0] == 0:
-        default_password_hash = hash_password("BioTeK2024!")
-        cursor.execute("""
-            INSERT INTO admin_accounts (admin_id, email, password_hash, full_name, created_at, super_admin)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, ("admin", "admin@biotek.health", default_password_hash, "System Administrator", datetime.now().isoformat(), 1))
-    
-    # Staff account audit log
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS staff_account_audit (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            admin_id TEXT NOT NULL,
-            action TEXT NOT NULL,
-            user_id TEXT,
-            details TEXT,
-            ip_address TEXT
-        )
-    """)
-    
-    # Password reset tokens
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS password_reset_tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            token TEXT UNIQUE NOT NULL,
-            email TEXT NOT NULL,
-            user_type TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            expires_at TEXT NOT NULL,
-            used INTEGER DEFAULT 0,
-            used_at TEXT
-        )
-    """)
-    
-    # Healthcare institutions registry
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS institutions (
-            institution_id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            type TEXT NOT NULL,
-            address TEXT,
-            contact_email TEXT,
-            contact_phone TEXT,
-            verified INTEGER DEFAULT 0,
-            active INTEGER DEFAULT 1,
-            public_key TEXT,
-            created_at TEXT NOT NULL,
-            created_by TEXT
-        )
-    """)
-    
-    # Data exchange requests
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS data_exchange_requests (
-            exchange_id TEXT PRIMARY KEY,
-            patient_id TEXT NOT NULL,
-            requesting_institution TEXT NOT NULL,
-            sending_institution TEXT NOT NULL,
-            purpose TEXT NOT NULL,
-            categories TEXT NOT NULL,
-            status TEXT NOT NULL,
-            requested_by TEXT NOT NULL,
-            requested_at TEXT NOT NULL,
-            patient_consent_status TEXT,
-            patient_consent_at TEXT,
-            approved_by TEXT,
-            approved_at TEXT,
-            sent_at TEXT,
-            received_at TEXT,
-            expires_at TEXT,
-            denial_reason TEXT
-        )
-    """)
-    
-    # Data exchange logs
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS data_exchange_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            exchange_id TEXT NOT NULL,
-            event_type TEXT NOT NULL,
-            details TEXT,
-            user_id TEXT,
-            timestamp TEXT NOT NULL,
-            ip_address TEXT
-        )
-    """)
-    
-    # Patient sharing consents
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sharing_consents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            patient_id TEXT NOT NULL,
-            institution_id TEXT NOT NULL,
-            consent_given INTEGER DEFAULT 0,
-            granted_at TEXT,
-            revoked INTEGER DEFAULT 0,
-            revoked_at TEXT,
-            expires_at TEXT,
-            purpose TEXT,
-            data_categories TEXT
-        )
-    """)
-    
-    # Patient data share links
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patient_share_links (
-            share_token TEXT PRIMARY KEY,
-            patient_id TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            expires_at TEXT NOT NULL,
-            access_count INTEGER DEFAULT 0,
-            max_accesses INTEGER DEFAULT 1,
-            revoked INTEGER DEFAULT 0,
-            format TEXT NOT NULL,
-            recipient_email TEXT
-        )
-    """)
-    
-    # Patient data download requests (HIPAA tracking)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patient_data_requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            patient_id TEXT NOT NULL,
-            request_type TEXT NOT NULL,
-            format TEXT NOT NULL,
-            requested_at TEXT NOT NULL,
-            fulfilled_at TEXT,
-            delivery_method TEXT,
-            status TEXT NOT NULL
-        )
-    """)
-    
-    # Patient clinical records - stores clinical data with privacy controls
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patient_records (
-            patient_id TEXT PRIMARY KEY,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            updated_by TEXT NOT NULL,
-            
-            -- Demographics
-            age INTEGER,
-            sex INTEGER,
-            
-            -- Vitals
-            bmi REAL,
-            bp_systolic INTEGER,
-            bp_diastolic INTEGER,
-            heart_rate INTEGER,
-            
-            -- Lipid Panel
-            total_cholesterol REAL,
-            hdl REAL,
-            ldl REAL,
-            triglycerides REAL,
-            
-            -- Metabolic
-            hba1c REAL,
-            fasting_glucose REAL,
-            egfr REAL,
-            
-            -- Lifestyle
-            smoking_pack_years REAL,
-            exercise_hours_weekly REAL,
-            
-            -- Medical History
-            has_diabetes INTEGER,
-            on_bp_medication INTEGER,
-            family_history_score INTEGER,
-            
-            -- Privacy
-            consent_given INTEGER DEFAULT 1,
-            data_retention_days INTEGER DEFAULT 365,
-            deletion_requested_at TEXT
-        )
-    """)
-    
-    # Patient data access audit
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patient_data_audit (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            patient_id TEXT NOT NULL,
-            action TEXT NOT NULL,
-            user_id TEXT NOT NULL,
-            user_role TEXT NOT NULL,
-            details TEXT
-        )
-    """)
-    
-    # Patient prediction results - stores predictions with visibility control
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patient_prediction_results (
-            patient_id TEXT PRIMARY KEY,
-            updated_at TEXT NOT NULL,
-            created_by TEXT,
-            visibility TEXT DEFAULT 'patient_visible',
-            prediction_json TEXT NOT NULL,
-            patient_summary_json TEXT
-        )
-    """)
-    
-    # NOTE: Schema migrations are handled by Alembic
-    # Run: POST /admin/run-migrations with X-Admin-Key header
-    # Or: alembic upgrade head
-    
-    # Patient variant analysis results
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patient_variant_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            patient_id TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            created_by TEXT NOT NULL,
-            variant TEXT NOT NULL,
-            gene TEXT,
-            classification TEXT NOT NULL,
-            confidence REAL,
-            result_json TEXT NOT NULL
-        )
-    """)
-    
-    # Patient imaging results
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patient_imaging_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            patient_id TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            created_by TEXT NOT NULL,
-            image_type TEXT NOT NULL,
-            finding_summary TEXT,
-            result_json TEXT NOT NULL
-        )
-    """)
-    
-    # Patient treatment protocols
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patient_treatments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            patient_id TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            created_by TEXT NOT NULL,
-            treatment_type TEXT NOT NULL,
-            protocol_summary TEXT,
-            result_json TEXT NOT NULL
-        )
-    """)
-    
-    # Patient clinical reasoning results
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patient_clinical_reasoning (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            patient_id TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            created_by TEXT NOT NULL,
-            assessment_summary TEXT,
-            result_json TEXT NOT NULL
-        )
-    """)
-    
-    # Create demo accounts if they don't exist
-    demo_password_hash = hash_password("demo123")
-    demo_accounts = [
-        ("doctor_DOC001", "doctor@biotek.demo", demo_password_hash, "doctor", "Dr. Demo Doctor", "EMP001", "Cardiology"),
-        ("nurse_NUR001", "nurse@biotek.demo", demo_password_hash, "nurse", "Demo Nurse", "EMP002", "Emergency"),
-        ("researcher_RES001", "researcher@biotek.demo", demo_password_hash, "researcher", "Demo Researcher", "EMP003", "Research"),
-    ]
-    
-    for user_id, email, pwd_hash, role, full_name, emp_id, dept in demo_accounts:
-        cursor.execute("""
-            INSERT OR IGNORE INTO staff_accounts 
-            (user_id, email, password_hash, role, full_name, employee_id, department, created_at, created_by, activated)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-        """, (user_id, email, pwd_hash, role, full_name, emp_id, dept, datetime.now().isoformat(), "system"))
-    
-    # Create demo admin
-    admin_password_hash = hash_password("admin123")
-    cursor.execute("""
-        INSERT OR IGNORE INTO admin_accounts 
-        (admin_id, email, password_hash, full_name, created_at, super_admin)
-        VALUES (?, ?, ?, ?, ?, 1)
-    """, ("admin_ADM001", "admin@biotek.demo", admin_password_hash, "Demo Admin", datetime.now().isoformat()))
-    
-    conn.commit()
-    conn.close()
-    print("✓ Audit database initialized with access control")
-    print("✓ Demo accounts created (password: demo123, admin: admin123)")
+        for table, column, col_type in migration_columns:
+            try:
+                execute_query(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}")
+            except Exception:
+                pass  # Column may already exist
+        
+        # Seed default admin account if none exists
+        result = execute_query("SELECT COUNT(*) FROM admin_accounts", (), fetch='one')
+        if result and result[0] == 0:
+            default_password_hash = hash_password("BioTeK2024!")
+            execute_query("""
+                INSERT INTO admin_accounts (admin_id, email, password_hash, full_name, created_at, super_admin)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, ("admin", "admin@biotek.health", default_password_hash, "System Administrator", datetime.now().isoformat(), 1))
+        
+        # Seed default staff accounts if none exist
+        result = execute_query("SELECT COUNT(*) FROM staff_accounts", (), fetch='one')
+        if result and result[0] == 0:
+            default_pw = hash_password("demo123")
+            now = datetime.now().isoformat()
+            demo_accounts = [
+                ("doctor_DOC001", "doctor@biotek.health", default_pw, "doctor", "Dr. Sarah Smith", "EMP-DOC-001", "Internal Medicine", now, "system", 1),
+                ("nurse_NUR001", "nurse@biotek.health", default_pw, "nurse", "Emily Johnson RN", "EMP-NUR-001", "Patient Care", now, "system", 1),
+                ("researcher_RES001", "researcher@biotek.health", default_pw, "researcher", "Dr. Michael Chen", "EMP-RES-001", "Clinical Research", now, "system", 1),
+                ("receptionist_REC001", "receptionist@biotek.health", default_pw, "receptionist", "Lisa Martinez", "EMP-REC-001", "Front Desk", now, "system", 1),
+            ]
+            for user_id, email, pwd_hash, role, full_name, emp_id, dept, created, created_by, activated in demo_accounts:
+                execute_query("""
+                    INSERT INTO staff_accounts (user_id, email, password_hash, role, full_name, employee_id, department, created_at, created_by, activated)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (user_id, email, pwd_hash, role, full_name, emp_id, dept, created, created_by, activated))
+        
+        print("✓ PostgreSQL database initialized with access control")
+        print("✓ Demo accounts created (password: demo123, admin: BioTeK2024!)")
+        
+    except Exception as e:
+        print(f"Database initialization warning: {e}")
 
 
 # ============ Access Control Models ============
@@ -1258,10 +1247,7 @@ def create_session(user_id: str, role: str) -> dict:
     created_at = datetime.now()
     expires_at = created_at + timedelta(hours=8)  # 8 hour sessions
     
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
+    execute_query("""
         INSERT INTO user_sessions 
         (session_id, user_id, user_role, created_at, expires_at)
         VALUES (?, ?, ?, ?, ?)
@@ -1273,9 +1259,6 @@ def create_session(user_id: str, role: str) -> dict:
         expires_at.isoformat()
     ))
     
-    conn.commit()
-    conn.close()
-    
     return {
         "session_id": session_id,
         "expires_at": expires_at.isoformat()
@@ -1283,17 +1266,11 @@ def create_session(user_id: str, role: str) -> dict:
 
 def verify_session(session_id: str) -> Optional[dict]:
     """Verify session is valid and active"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
+    result = execute_query("""
         SELECT user_id, user_role, expires_at, active
         FROM user_sessions
         WHERE session_id = ?
-    """, (session_id,))
-    
-    result = cursor.fetchone()
-    conn.close()
+    """, (session_id,), fetch='one')
     
     if not result:
         return None
@@ -1669,21 +1646,22 @@ async def register_patient(request: PatientRegistrationRequest):
             raise HTTPException(status_code=400, detail=error_msg)
         
         # Check if email already exists
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT patient_id FROM patient_accounts WHERE email = ?", (request.email,))
-        if cursor.fetchone():
-            conn.close()
+        existing_email = execute_query(
+            "SELECT patient_id FROM patient_accounts WHERE email = ?",
+            (request.email,), fetch='one'
+        )
+        if existing_email:
             raise HTTPException(status_code=400, detail="Email already registered")
         
         # Generate patient ID from MRN
         patient_id = f"PAT-{request.medical_record_number}"
         
         # Check if patient ID already exists
-        cursor.execute("SELECT patient_id FROM patient_accounts WHERE patient_id = ?", (patient_id,))
-        if cursor.fetchone():
-            conn.close()
+        existing_patient = execute_query(
+            "SELECT patient_id FROM patient_accounts WHERE patient_id = ?",
+            (patient_id,), fetch='one'
+        )
+        if existing_patient:
             raise HTTPException(status_code=400, detail="Medical record number already registered")
         
         # Hash password
@@ -1698,17 +1676,16 @@ async def register_patient(request: PatientRegistrationRequest):
         # Check if verification code was provided and is valid
         verified = False
         if request.verification_code:
-            cursor.execute("""
+            code_result = execute_query("""
                 SELECT id, expires_at FROM verification_codes 
                 WHERE code = ? AND used = 0
-            """, (request.verification_code,))
-            code_result = cursor.fetchone()
+            """, (request.verification_code,), fetch='one')
             
             if code_result:
                 code_id, expires_at = code_result
                 if datetime.fromisoformat(expires_at) > datetime.now():
                     # Mark code as used
-                    cursor.execute("""
+                    execute_query("""
                         UPDATE verification_codes 
                         SET used = 1, used_at = ?, patient_id = ?
                         WHERE id = ?
@@ -1716,7 +1693,7 @@ async def register_patient(request: PatientRegistrationRequest):
                     verified = True
         
         # Insert patient account
-        cursor.execute("""
+        execute_query("""
             INSERT INTO patient_accounts 
             (patient_id, email, password_hash, mrn_encrypted, date_of_birth, 
              created_at, verified, verification_token)
@@ -1731,9 +1708,6 @@ async def register_patient(request: PatientRegistrationRequest):
             1 if verified else 0,
             verification_token
         ))
-        
-        conn.commit()
-        conn.close()
         
         # Log the registration
         log_access_attempt(
@@ -1771,21 +1745,15 @@ async def login_patient(request: PatientLoginRequest):
     Authenticate a patient with password verification
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Get patient account
-        cursor.execute("""
+        result = execute_query("""
             SELECT password_hash, email, verified, account_locked, 
                    failed_login_attempts, deleted_at
             FROM patient_accounts
             WHERE patient_id = ?
-        """, (request.patient_id,))
-        
-        result = cursor.fetchone()
+        """, (request.patient_id,), fetch='one')
         
         if not result:
-            # Log failed attempt
             log_access_attempt(
                 user_id=request.patient_id,
                 role="patient",
@@ -1794,46 +1762,35 @@ async def login_patient(request: PatientLoginRequest):
                 granted=False,
                 reason="Patient account not found"
             )
-            conn.close()
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
         password_hash, email, verified, account_locked, failed_attempts, deleted_at = result
         
         # Check if account is deleted
         if deleted_at:
-            conn.close()
             raise HTTPException(status_code=403, detail="Account has been deleted")
         
         # Check if account is locked
         if account_locked:
-            conn.close()
             raise HTTPException(status_code=403, detail="Account is locked. Contact support.")
         
         # Verify password
         if not verify_password(request.password, password_hash):
-            # Increment failed attempts
-            new_failed_attempts = failed_attempts + 1
-            cursor.execute("""
+            new_failed_attempts = (failed_attempts or 0) + 1
+            execute_query("""
                 UPDATE patient_accounts 
                 SET failed_login_attempts = ?
                 WHERE patient_id = ?
             """, (new_failed_attempts, request.patient_id))
             
-            # Lock account after 5 failed attempts
             if new_failed_attempts >= 5:
-                cursor.execute("""
+                execute_query("""
                     UPDATE patient_accounts 
                     SET account_locked = 1
                     WHERE patient_id = ?
                 """, (request.patient_id,))
-                conn.commit()
-                conn.close()
                 raise HTTPException(status_code=403, detail="Account locked due to too many failed attempts")
             
-            conn.commit()
-            conn.close()
-            
-            # Log failed attempt
             log_access_attempt(
                 user_id=request.patient_id,
                 role="patient",
@@ -1846,14 +1803,11 @@ async def login_patient(request: PatientLoginRequest):
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
         # Reset failed attempts on successful login
-        cursor.execute("""
+        execute_query("""
             UPDATE patient_accounts 
             SET failed_login_attempts = 0, last_login = ?
             WHERE patient_id = ?
         """, (datetime.now().isoformat(), request.patient_id))
-        
-        conn.commit()
-        conn.close()
         
         # Create session
         session = create_session(request.patient_id, "patient")
@@ -1899,31 +1853,22 @@ async def verify_email(token: str):
     Verify patient email with verification token
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
+        result = execute_query("""
             SELECT patient_id FROM patient_accounts
             WHERE verification_token = ? AND verified = 0
-        """, (token,))
-        
-        result = cursor.fetchone()
+        """, (token,), fetch='one')
         
         if not result:
-            conn.close()
             raise HTTPException(status_code=400, detail="Invalid or expired verification token")
         
         patient_id = result[0]
         
         # Mark as verified
-        cursor.execute("""
+        execute_query("""
             UPDATE patient_accounts
             SET verified = 1, verification_token = NULL
             WHERE patient_id = ?
         """, (patient_id,))
-        
-        conn.commit()
-        conn.close()
         
         return {"message": "Email verified successfully", "patient_id": patient_id}
         
@@ -1941,33 +1886,25 @@ async def admin_login(request: AdminLoginRequest, two_factor_token: Optional[str
     Admin login with password verification and optional 2FA
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Get admin account
-        cursor.execute("""
+        result = execute_query("""
             SELECT password_hash, full_name, email, super_admin, two_factor_enabled, two_factor_secret
             FROM admin_accounts
             WHERE admin_id = ?
-        """, (request.admin_id,))
-        
-        result = cursor.fetchone()
+        """, (request.admin_id,), fetch='one')
         
         if not result:
-            conn.close()
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
         password_hash, full_name, email, super_admin, two_factor_enabled, two_factor_secret = result
         
         # Verify password
         if not verify_password(request.password, password_hash):
-            conn.close()
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
         # If 2FA is enabled, require token
         if two_factor_enabled:
             if not two_factor_token:
-                conn.close()
                 return {
                     "requires_2fa": True,
                     "message": "2FA token required"
@@ -1975,18 +1912,14 @@ async def admin_login(request: AdminLoginRequest, two_factor_token: Optional[str
             
             # Verify 2FA token
             if not verify_2fa_token(two_factor_secret, two_factor_token):
-                conn.close()
                 raise HTTPException(status_code=401, detail="Invalid 2FA token")
         
         # Update last login
-        cursor.execute("""
+        execute_query("""
             UPDATE admin_accounts
             SET last_login = ?
             WHERE admin_id = ?
         """, (datetime.now().isoformat(), request.admin_id))
-        
-        conn.commit()
-        conn.close()
         
         # Create session
         session = create_session(request.admin_id, "admin")
@@ -2024,27 +1957,25 @@ async def create_staff_account(request: CreateStaffRequest, admin_id: str = Head
     """
     try:
         # Verify admin exists
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        # Verify admin
+        admin_check = execute_query(
+            "SELECT admin_id FROM admin_accounts WHERE admin_id = ?",
+            (admin_id,), fetch='one'
+        )
+        if not admin_check:
             raise HTTPException(status_code=403, detail="Unauthorized: Admin access required")
         
         # Validate role
         if request.role not in [Role.DOCTOR, Role.NURSE, Role.RESEARCHER, Role.ADMIN, Role.RECEPTIONIST]:
-            conn.close()
             raise HTTPException(status_code=400, detail="Invalid role for staff account")
         
         # Check if email or employee ID already exists
-        cursor.execute("""
+        existing = execute_query("""
             SELECT user_id FROM staff_accounts 
             WHERE email = ? OR employee_id = ?
-        """, (request.email, request.employee_id))
+        """, (request.email, request.employee_id), fetch='one')
         
-        if cursor.fetchone():
-            conn.close()
+        if existing:
             raise HTTPException(status_code=400, detail="Email or Employee ID already exists")
         
         # Generate user ID from employee ID
@@ -2057,7 +1988,7 @@ async def create_staff_account(request: CreateStaffRequest, admin_id: str = Head
         activation_token = generate_verification_token()
         
         # Create staff account
-        cursor.execute("""
+        execute_query("""
             INSERT INTO staff_accounts
             (user_id, email, password_hash, role, full_name, employee_id, 
              department, created_at, created_by, activated, activation_token)
@@ -2077,7 +2008,7 @@ async def create_staff_account(request: CreateStaffRequest, admin_id: str = Head
         ))
         
         # Log the action
-        cursor.execute("""
+        execute_query("""
             INSERT INTO staff_account_audit
             (timestamp, admin_id, action, user_id, details)
             VALUES (?, ?, ?, ?, ?)
@@ -2092,9 +2023,6 @@ async def create_staff_account(request: CreateStaffRequest, admin_id: str = Head
                 "email": request.email
             })
         ))
-        
-        conn.commit()
-        conn.close()
         
         # Send activation email with credentials
         send_account_activation_email(
@@ -2271,30 +2199,29 @@ async def update_staff_status(
     """
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        admin_check = execute_query(
+            "SELECT admin_id FROM admin_accounts WHERE admin_id = ?",
+            (admin_id,), fetch='one'
+        )
+        if not admin_check:
             raise HTTPException(status_code=403, detail="Unauthorized")
         
         # Update staff account status
         if request.disabled:
-            cursor.execute("""
+            execute_query("""
                 UPDATE staff_accounts
                 SET account_disabled = 1, disabled_at = ?, disabled_by = ?, disabled_reason = ?
                 WHERE user_id = ?
             """, (datetime.now().isoformat(), admin_id, request.reason, request.user_id))
         else:
-            cursor.execute("""
+            execute_query("""
                 UPDATE staff_accounts
                 SET account_disabled = 0, disabled_at = NULL, disabled_by = NULL, disabled_reason = NULL
                 WHERE user_id = ?
             """, (request.user_id,))
         
         # Log the action
-        cursor.execute("""
+        execute_query("""
             INSERT INTO staff_account_audit
             (timestamp, admin_id, action, user_id, details)
             VALUES (?, ?, ?, ?, ?)
@@ -2305,9 +2232,6 @@ async def update_staff_status(
             request.user_id,
             json.dumps({"reason": request.reason})
         ))
-        
-        conn.commit()
-        conn.close()
         
         status = "disabled" if request.disabled else "enabled"
         return {"message": f"Account {status} successfully", "user_id": request.user_id}
@@ -2327,25 +2251,18 @@ async def request_password_reset(request: PasswordResetRequest):
     Sends email with reset token
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Find user by email and type
         if request.user_type == 'patient':
-            cursor.execute("SELECT patient_id FROM patient_accounts WHERE email = ?", (request.email,))
+            result = execute_query("SELECT patient_id FROM patient_accounts WHERE email = ?", (request.email,), fetch='one')
         elif request.user_type == 'staff':
-            cursor.execute("SELECT user_id FROM staff_accounts WHERE email = ?", (request.email,))
+            result = execute_query("SELECT user_id FROM staff_accounts WHERE email = ?", (request.email,), fetch='one')
         elif request.user_type == 'admin':
-            cursor.execute("SELECT admin_id FROM admin_accounts WHERE email = ?", (request.email,))
+            result = execute_query("SELECT admin_id FROM admin_accounts WHERE email = ?", (request.email,), fetch='one')
         else:
-            conn.close()
             raise HTTPException(status_code=400, detail="Invalid user type")
-        
-        result = cursor.fetchone()
         
         # Always return success to prevent email enumeration
         if not result:
-            conn.close()
             return {"message": "If this email exists, a reset link has been sent"}
         
         # Generate reset token
@@ -2353,7 +2270,7 @@ async def request_password_reset(request: PasswordResetRequest):
         expires_at = datetime.now() + timedelta(hours=1)  # 1 hour expiry
         
         # Store reset token
-        cursor.execute("""
+        execute_query("""
             INSERT INTO password_reset_tokens
             (token, email, user_type, created_at, expires_at)
             VALUES (?, ?, ?, ?, ?)
@@ -2364,9 +2281,6 @@ async def request_password_reset(request: PasswordResetRequest):
             datetime.now().isoformat(),
             expires_at.isoformat()
         ))
-        
-        conn.commit()
-        conn.close()
         
         # Send password reset email
         send_password_reset_email(request.email, reset_token, request.user_type)
@@ -2393,30 +2307,22 @@ async def reset_password(request: PasswordResetConfirm):
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
         
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Find and validate reset token
-        cursor.execute("""
+        result = execute_query("""
             SELECT email, user_type, expires_at, used
             FROM password_reset_tokens
             WHERE token = ?
-        """, (request.token,))
-        
-        result = cursor.fetchone()
+        """, (request.token,), fetch='one')
         
         if not result:
-            conn.close()
             raise HTTPException(status_code=400, detail="Invalid or expired reset token")
         
         email, user_type, expires_at, used = result
         
         if used:
-            conn.close()
             raise HTTPException(status_code=400, detail="Reset token has already been used")
         
         if datetime.fromisoformat(expires_at) < datetime.now():
-            conn.close()
             raise HTTPException(status_code=400, detail="Reset token has expired")
         
         # Hash new password
@@ -2424,33 +2330,30 @@ async def reset_password(request: PasswordResetConfirm):
         
         # Update password based on user type
         if user_type == 'patient':
-            cursor.execute("""
+            execute_query("""
                 UPDATE patient_accounts
                 SET password_hash = ?, failed_login_attempts = 0
                 WHERE email = ?
             """, (new_password_hash, email))
         elif user_type == 'staff':
-            cursor.execute("""
+            execute_query("""
                 UPDATE staff_accounts
                 SET password_hash = ?, failed_login_attempts = 0, account_locked = 0
                 WHERE email = ?
             """, (new_password_hash, email))
         elif user_type == 'admin':
-            cursor.execute("""
+            execute_query("""
                 UPDATE admin_accounts
                 SET password_hash = ?
                 WHERE email = ?
             """, (new_password_hash, email))
         
         # Mark token as used
-        cursor.execute("""
+        execute_query("""
             UPDATE password_reset_tokens
             SET used = 1, used_at = ?
             WHERE token = ?
         """, (datetime.now().isoformat(), request.token))
-        
-        conn.commit()
-        conn.close()
         
         return {"message": "Password reset successfully"}
         
@@ -2471,40 +2374,23 @@ async def change_password(request: ChangePasswordRequest):
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
         
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Get current password hash based on user type
         if request.user_type == 'patient':
-            cursor.execute("""
-                SELECT password_hash FROM patient_accounts
-                WHERE patient_id = ?
-            """, (request.user_id,))
+            result = execute_query("SELECT password_hash FROM patient_accounts WHERE patient_id = ?", (request.user_id,), fetch='one')
         elif request.user_type == 'staff':
-            cursor.execute("""
-                SELECT password_hash FROM staff_accounts
-                WHERE user_id = ?
-            """, (request.user_id,))
+            result = execute_query("SELECT password_hash FROM staff_accounts WHERE user_id = ?", (request.user_id,), fetch='one')
         elif request.user_type == 'admin':
-            cursor.execute("""
-                SELECT password_hash FROM admin_accounts
-                WHERE admin_id = ?
-            """, (request.user_id,))
+            result = execute_query("SELECT password_hash FROM admin_accounts WHERE admin_id = ?", (request.user_id,), fetch='one')
         else:
-            conn.close()
             raise HTTPException(status_code=400, detail="Invalid user type")
         
-        result = cursor.fetchone()
-        
         if not result:
-            conn.close()
             raise HTTPException(status_code=404, detail="User not found")
         
         current_password_hash = result[0]
         
         # Verify old password
         if not verify_password(request.old_password, current_password_hash):
-            conn.close()
             raise HTTPException(status_code=401, detail="Current password is incorrect")
         
         # Hash new password
@@ -2512,26 +2398,11 @@ async def change_password(request: ChangePasswordRequest):
         
         # Update password
         if request.user_type == 'patient':
-            cursor.execute("""
-                UPDATE patient_accounts
-                SET password_hash = ?
-                WHERE patient_id = ?
-            """, (new_password_hash, request.user_id))
+            execute_query("UPDATE patient_accounts SET password_hash = ? WHERE patient_id = ?", (new_password_hash, request.user_id))
         elif request.user_type == 'staff':
-            cursor.execute("""
-                UPDATE staff_accounts
-                SET password_hash = ?
-                WHERE user_id = ?
-            """, (new_password_hash, request.user_id))
+            execute_query("UPDATE staff_accounts SET password_hash = ? WHERE user_id = ?", (new_password_hash, request.user_id))
         elif request.user_type == 'admin':
-            cursor.execute("""
-                UPDATE admin_accounts
-                SET password_hash = ?
-                WHERE admin_id = ?
-            """, (new_password_hash, request.user_id))
-        
-        conn.commit()
-        conn.close()
+            execute_query("UPDATE admin_accounts SET password_hash = ? WHERE admin_id = ?", (new_password_hash, request.user_id))
         
         return {"message": "Password changed successfully"}
         
@@ -2550,25 +2421,18 @@ async def enable_2fa(admin_id: str = Header(..., alias="X-Admin-ID")):
     Returns QR code and backup codes
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Check if admin exists
-        cursor.execute("""
+        result = execute_query("""
             SELECT email, two_factor_enabled FROM admin_accounts
             WHERE admin_id = ?
-        """, (admin_id,))
-        
-        result = cursor.fetchone()
+        """, (admin_id,), fetch='one')
         
         if not result:
-            conn.close()
             raise HTTPException(status_code=404, detail="Admin not found")
         
         email, two_factor_enabled = result
         
         if two_factor_enabled:
-            conn.close()
             raise HTTPException(status_code=400, detail="2FA is already enabled")
         
         # Generate 2FA secret
@@ -2584,14 +2448,11 @@ async def enable_2fa(admin_id: str = Header(..., alias="X-Admin-ID")):
         hashed_codes = [hash_backup_code(code) for code in backup_codes]
         
         # Store secret and backup codes (not enabled yet - wait for verification)
-        cursor.execute("""
+        execute_query("""
             UPDATE admin_accounts
             SET two_factor_secret = ?, backup_codes = ?
             WHERE admin_id = ?
         """, (secret, json.dumps(hashed_codes), admin_id))
-        
-        conn.commit()
-        conn.close()
         
         return Enable2FAResponse(
             secret=secret,
@@ -2612,41 +2473,30 @@ async def verify_and_enable_2fa(request: Verify2FARequest):
     Verify 2FA token and enable 2FA
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Get admin's 2FA secret
-        cursor.execute("""
+        result = execute_query("""
             SELECT two_factor_secret, two_factor_enabled FROM admin_accounts
             WHERE admin_id = ?
-        """, (request.admin_id,))
-        
-        result = cursor.fetchone()
+        """, (request.admin_id,), fetch='one')
         
         if not result:
-            conn.close()
             raise HTTPException(status_code=404, detail="Admin not found")
         
         secret, two_factor_enabled = result
         
         if not secret:
-            conn.close()
             raise HTTPException(status_code=400, detail="2FA setup not started")
         
         # Verify token
         if not verify_2fa_token(secret, request.token):
-            conn.close()
             raise HTTPException(status_code=401, detail="Invalid 2FA token")
         
         # Enable 2FA
-        cursor.execute("""
+        execute_query("""
             UPDATE admin_accounts
             SET two_factor_enabled = 1
             WHERE admin_id = ?
         """, (request.admin_id,))
-        
-        conn.commit()
-        conn.close()
         
         return {"message": "2FA enabled successfully"}
         
@@ -2662,37 +2512,27 @@ async def disable_2fa(request: Disable2FARequest):
     Disable 2FA for admin account (requires password confirmation)
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Get admin account
-        cursor.execute("""
+        result = execute_query("""
             SELECT password_hash, two_factor_enabled FROM admin_accounts
             WHERE admin_id = ?
-        """, (request.admin_id,))
-        
-        result = cursor.fetchone()
+        """, (request.admin_id,), fetch='one')
         
         if not result:
-            conn.close()
             raise HTTPException(status_code=404, detail="Admin not found")
         
         password_hash, two_factor_enabled = result
         
         # Verify password
         if not verify_password(request.password, password_hash):
-            conn.close()
             raise HTTPException(status_code=401, detail="Invalid password")
         
         # Disable 2FA
-        cursor.execute("""
+        execute_query("""
             UPDATE admin_accounts
             SET two_factor_enabled = 0, two_factor_secret = NULL, backup_codes = NULL
             WHERE admin_id = ?
         """, (request.admin_id,))
-        
-        conn.commit()
-        conn.close()
         
         return {"message": "2FA disabled successfully"}
         
@@ -2709,13 +2549,8 @@ async def get_overview_report(admin_id: str = Header(..., alias="X-Admin-ID")):
     """Get system overview statistics"""
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized")
-        conn.close()
         
         return get_system_overview()
     except HTTPException:
@@ -2729,13 +2564,8 @@ async def get_role_activity_report(admin_id: str = Header(..., alias="X-Admin-ID
     """Get activity breakdown by user role"""
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized")
-        conn.close()
         
         return {"activity_by_role": get_activity_by_role()}
     except HTTPException:
@@ -2749,13 +2579,8 @@ async def get_purpose_activity_report(admin_id: str = Header(..., alias="X-Admin
     """Get activity breakdown by declared purpose"""
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized")
-        conn.close()
         
         return {"activity_by_purpose": get_activity_by_purpose()}
     except HTTPException:
@@ -2772,13 +2597,8 @@ async def get_hourly_activity_report(
     """Get hourly activity for the last N hours"""
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized")
-        conn.close()
         
         return {"hourly_activity": get_hourly_activity(hours)}
     except HTTPException:
@@ -2795,13 +2615,8 @@ async def get_active_users_report(
     """Get most active users"""
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized")
-        conn.close()
         
         return {"most_active_users": get_most_active_users(limit)}
     except HTTPException:
@@ -2815,13 +2630,8 @@ async def get_security_events_report(admin_id: str = Header(..., alias="X-Admin-
     """Get security-related events"""
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized")
-        conn.close()
         
         return get_security_events()
     except HTTPException:
@@ -2835,13 +2645,8 @@ async def get_compliance_report_endpoint(admin_id: str = Header(..., alias="X-Ad
     """Get HIPAA/GDPR compliance report"""
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized")
-        conn.close()
         
         return get_compliance_report()
     except HTTPException:
@@ -2861,13 +2666,8 @@ async def export_audit_log(
     
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized")
-        conn.close()
         
         csv_data = export_audit_log_csv(start_date, end_date)
         
@@ -2897,18 +2697,14 @@ async def register_institution(
     """
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized")
         
         # Generate institution ID
         institution_id = f"INST-{hashlib.sha256(request.name.encode()).hexdigest()[:8].upper()}"
         
         # Insert institution
-        cursor.execute("""
+        execute_query("""
             INSERT INTO institutions
             (institution_id, name, type, address, contact_email, contact_phone, created_at, created_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -2922,9 +2718,6 @@ async def register_institution(
             datetime.now().isoformat(),
             admin_id
         ))
-        
-        conn.commit()
-        conn.close()
         
         return {
             "institution_id": institution_id,
@@ -2945,33 +2738,28 @@ async def list_institutions(admin_id: str = Header(..., alias="X-Admin-ID")):
     """
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized")
         
         # Get all institutions
-        cursor.execute("""
+        rows = execute_query("""
             SELECT institution_id, name, type, contact_email, verified, active, created_at
             FROM institutions
             ORDER BY created_at DESC
-        """)
+        """, (), fetch='all') or []
         
         institutions = []
-        for row in cursor.fetchall():
+        for row in rows:
             institutions.append({
                 "institution_id": row[0],
                 "name": row[1],
                 "type": row[2],
                 "contact_email": row[3],
-                "verified": bool(row[4]),
-                "active": bool(row[5]),
+                "verified": bool(row[4]) if row[4] is not None else False,
+                "active": bool(row[5]) if row[5] is not None else False,
                 "created_at": row[6]
             })
         
-        conn.close()
         return {"institutions": institutions, "total": len(institutions)}
         
     except HTTPException:
@@ -2987,21 +2775,16 @@ async def request_patient_data(request: DataExchangeRequest):
     Creates a data exchange request that requires patient consent
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Verify requesting institution exists
-        cursor.execute("SELECT institution_id FROM institutions WHERE institution_id = ?", 
-                      (request.requesting_institution,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT institution_id FROM institutions WHERE institution_id = ?", 
+                      (request.requesting_institution,), fetch='one'):
             raise HTTPException(status_code=404, detail="Requesting institution not found")
         
         # Generate exchange ID
         exchange_id = create_exchange_id()
         
         # Create exchange request
-        cursor.execute("""
+        execute_query("""
             INSERT INTO data_exchange_requests
             (exchange_id, patient_id, requesting_institution, sending_institution, 
              purpose, categories, status, requested_by, requested_at, expires_at)
@@ -3020,7 +2803,7 @@ async def request_patient_data(request: DataExchangeRequest):
         ))
         
         # Log the request
-        cursor.execute("""
+        execute_query("""
             INSERT INTO data_exchange_logs
             (exchange_id, event_type, details, user_id, timestamp)
             VALUES (?, ?, ?, ?, ?)
@@ -3031,9 +2814,6 @@ async def request_patient_data(request: DataExchangeRequest):
             request.requested_by,
             datetime.now().isoformat()
         ))
-        
-        conn.commit()
-        conn.close()
         
         # In production: Notify patient and staff about request
         
@@ -3056,22 +2836,18 @@ async def get_patient_exchange_requests(patient_id: str):
     Patient can see who is requesting their data
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
+        rows = execute_query("""
             SELECT exchange_id, requesting_institution, purpose, categories, 
                    status, requested_at, expires_at
             FROM data_exchange_requests
             WHERE patient_id = ? AND status IN ('pending', 'approved')
             ORDER BY requested_at DESC
-        """, (patient_id,))
+        """, (patient_id,), fetch='all') or []
         
         requests = []
-        for row in cursor.fetchall():
+        for row in rows:
             # Get institution details
-            cursor.execute("SELECT name, type FROM institutions WHERE institution_id = ?", (row[1],))
-            inst = cursor.fetchone()
+            inst = execute_query("SELECT name, type FROM institutions WHERE institution_id = ?", (row[1],), fetch='one')
             
             requests.append({
                 "exchange_id": row[0],
@@ -3081,13 +2857,12 @@ async def get_patient_exchange_requests(patient_id: str):
                     "type": inst[1] if inst else "Unknown"
                 },
                 "purpose": row[2],
-                "categories": json.loads(row[3]),
+                "categories": json.loads(row[3]) if row[3] else [],
                 "status": row[4],
                 "requested_at": row[5],
                 "expires_at": row[6]
             })
         
-        conn.close()
         return {"exchange_requests": requests, "total": len(requests)}
         
     except Exception as e:
@@ -3101,40 +2876,33 @@ async def patient_consent_to_exchange(request: PatientConsentDecision):
     Complete patient control over their data
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Get exchange request
-        cursor.execute("""
+        result = execute_query("""
             SELECT requesting_institution, patient_id, status
             FROM data_exchange_requests
             WHERE exchange_id = ?
-        """, (request.exchange_id,))
-        
-        result = cursor.fetchone()
+        """, (request.exchange_id,), fetch='one')
         
         if not result:
-            conn.close()
             raise HTTPException(status_code=404, detail="Exchange request not found")
         
         requesting_inst, patient_id_db, current_status = result
         
         # Verify patient ID matches
         if patient_id_db != request.patient_id:
-            conn.close()
             raise HTTPException(status_code=403, detail="Unauthorized")
         
         # Update request status
         if request.consent_given:
             new_status = ExchangeStatus.APPROVED.value
-            cursor.execute("""
+            execute_query("""
                 UPDATE data_exchange_requests
                 SET status = ?, patient_consent_status = 'approved', patient_consent_at = ?
                 WHERE exchange_id = ?
             """, (new_status, datetime.now().isoformat(), request.exchange_id))
             
             # Log approval
-            cursor.execute("""
+            execute_query("""
                 INSERT INTO data_exchange_logs
                 (exchange_id, event_type, details, user_id, timestamp)
                 VALUES (?, ?, ?, ?, ?)
@@ -3149,7 +2917,7 @@ async def patient_consent_to_exchange(request: PatientConsentDecision):
             message = "Consent granted. Data will be shared."
         else:
             new_status = ExchangeStatus.DENIED.value
-            cursor.execute("""
+            execute_query("""
                 UPDATE data_exchange_requests
                 SET status = ?, patient_consent_status = 'denied', 
                     patient_consent_at = ?, denial_reason = ?
@@ -3157,7 +2925,7 @@ async def patient_consent_to_exchange(request: PatientConsentDecision):
             """, (new_status, datetime.now().isoformat(), request.denial_reason, request.exchange_id))
             
             # Log denial
-            cursor.execute("""
+            execute_query("""
                 INSERT INTO data_exchange_logs
                 (exchange_id, event_type, details, user_id, timestamp)
                 VALUES (?, ?, ?, ?, ?)
@@ -3170,9 +2938,6 @@ async def patient_consent_to_exchange(request: PatientConsentDecision):
             ))
             
             message = "Consent denied. Data will not be shared."
-        
-        conn.commit()
-        conn.close()
         
         return {
             "exchange_id": request.exchange_id,
@@ -3193,33 +2958,24 @@ async def send_patient_data(request: SendDataRequest):
     Requires patient consent and admin approval
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Verify admin
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (request.admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (request.admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized: Admin access required")
         
         # Get exchange request
-        cursor.execute("""
+        result = execute_query("""
             SELECT patient_id, requesting_institution, purpose, categories, status
             FROM data_exchange_requests
             WHERE exchange_id = ?
-        """, (request.exchange_id,))
-        
-        result = cursor.fetchone()
+        """, (request.exchange_id,), fetch='one')
         
         if not result:
-            conn.close()
             raise HTTPException(status_code=404, detail="Exchange request not found")
         
         patient_id, requesting_inst, purpose, categories_json, status = result
         
         # Verify patient has consented
         if status != ExchangeStatus.APPROVED.value:
-            conn.close()
             raise HTTPException(status_code=403, detail="Patient consent required before sending data")
         
         # Get patient data (simulated - in production, fetch from database)
@@ -3251,7 +3007,7 @@ async def send_patient_data(request: SendDataRequest):
         encrypted_package = encrypt_data_for_exchange(package)
         
         # Update exchange request
-        cursor.execute("""
+        execute_query("""
             UPDATE data_exchange_requests
             SET status = ?, approved_by = ?, approved_at = ?, sent_at = ?
             WHERE exchange_id = ?
@@ -3264,7 +3020,7 @@ async def send_patient_data(request: SendDataRequest):
         ))
         
         # Log the send
-        cursor.execute("""
+        execute_query("""
             INSERT INTO data_exchange_logs
             (exchange_id, event_type, details, user_id, timestamp)
             VALUES (?, ?, ?, ?, ?)
@@ -3286,9 +3042,6 @@ async def send_patient_data(request: SendDataRequest):
             granted=True,
             reason=f"Data sent to {requesting_inst} via exchange {request.exchange_id}"
         )
-        
-        conn.commit()
-        conn.close()
         
         # In production: Actually send encrypted_package to recipient
         
@@ -3313,40 +3066,32 @@ async def get_exchange_audit_trail(exchange_id: str):
     Shows all events: request, consent, approval, send, receive
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Get exchange request details
-        cursor.execute("""
+        request_info = execute_query("""
             SELECT patient_id, requesting_institution, purpose, status, requested_at
             FROM data_exchange_requests
             WHERE exchange_id = ?
-        """, (exchange_id,))
-        
-        request_info = cursor.fetchone()
+        """, (exchange_id,), fetch='one')
         
         if not request_info:
-            conn.close()
             raise HTTPException(status_code=404, detail="Exchange not found")
         
         # Get all log events
-        cursor.execute("""
+        rows = execute_query("""
             SELECT event_type, details, user_id, timestamp
             FROM data_exchange_logs
             WHERE exchange_id = ?
             ORDER BY timestamp ASC
-        """, (exchange_id,))
+        """, (exchange_id,), fetch='all') or []
         
         events = []
-        for row in cursor.fetchall():
+        for row in rows:
             events.append({
                 "event_type": row[0],
                 "details": row[1],
                 "user_id": row[2],
                 "timestamp": row[3]
             })
-        
-        conn.close()
         
         return {
             "exchange_id": exchange_id,
@@ -3375,9 +3120,6 @@ async def download_patient_records(request: PatientDataDownloadRequest):
     from fastapi.responses import Response
     
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Get patient data (in production, fetch from database)
         # For demo, using sample data
         patient_data = {
@@ -3403,7 +3145,7 @@ async def download_patient_records(request: PatientDataDownloadRequest):
         data_package = create_patient_data_package(request.patient_id, patient_data)
         
         # Log the download request (HIPAA compliance)
-        cursor.execute("""
+        execute_query("""
             INSERT INTO patient_data_requests
             (patient_id, request_type, format, requested_at, status, delivery_method)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -3415,9 +3157,6 @@ async def download_patient_records(request: PatientDataDownloadRequest):
             "fulfilled",
             request.delivery_method
         ))
-        
-        conn.commit()
-        conn.close()
         
         # Generate appropriate format
         if request.format == "json":
@@ -3463,9 +3202,6 @@ async def create_patient_share_link(request: CreateShareLinkRequest):
     Patient-controlled data sharing
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Generate share token
         share_token = generate_share_token()
         
@@ -3477,7 +3213,7 @@ async def create_patient_share_link(request: CreateShareLinkRequest):
         )
         
         # Store in database
-        cursor.execute("""
+        execute_query("""
             INSERT INTO patient_share_links
             (share_token, patient_id, created_at, expires_at, max_accesses, format, recipient_email)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -3492,7 +3228,7 @@ async def create_patient_share_link(request: CreateShareLinkRequest):
         ))
         
         # Log the share creation
-        cursor.execute("""
+        execute_query("""
             INSERT INTO patient_data_requests
             (patient_id, request_type, format, requested_at, status, delivery_method)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -3504,9 +3240,6 @@ async def create_patient_share_link(request: CreateShareLinkRequest):
             "active",
             "link"
         ))
-        
-        conn.commit()
-        conn.close()
         
         # If recipient email provided, send email (in production)
         if request.recipient_email:
@@ -3535,46 +3268,34 @@ async def access_shared_data(share_token: str):
     from fastapi.responses import Response
     
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Get share link info
-        cursor.execute("""
+        result = execute_query("""
             SELECT patient_id, expires_at, access_count, max_accesses, revoked, format
             FROM patient_share_links
             WHERE share_token = ?
-        """, (share_token,))
-        
-        result = cursor.fetchone()
+        """, (share_token,), fetch='one')
         
         if not result:
-            conn.close()
             raise HTTPException(status_code=404, detail="Share link not found")
         
         patient_id, expires_at, access_count, max_accesses, revoked, data_format = result
         
         # Check if link is valid
         if revoked:
-            conn.close()
             raise HTTPException(status_code=403, detail="Share link has been revoked")
         
         if datetime.fromisoformat(expires_at) < datetime.now():
-            conn.close()
             raise HTTPException(status_code=403, detail="Share link has expired")
         
-        if access_count >= max_accesses:
-            conn.close()
+        if (access_count or 0) >= (max_accesses or 1):
             raise HTTPException(status_code=403, detail="Share link has reached maximum accesses")
         
         # Increment access count
-        cursor.execute("""
+        execute_query("""
             UPDATE patient_share_links
             SET access_count = access_count + 1
             WHERE share_token = ?
         """, (share_token,))
-        
-        conn.commit()
-        conn.close()
         
         # Get patient data
         patient_data = {
@@ -3616,34 +3337,24 @@ async def revoke_share_link(share_token: str, patient_id: str):
     Patient maintains control over their data
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Verify patient owns this share link
-        cursor.execute("""
+        result = execute_query("""
             SELECT patient_id FROM patient_share_links
             WHERE share_token = ?
-        """, (share_token,))
-        
-        result = cursor.fetchone()
+        """, (share_token,), fetch='one')
         
         if not result:
-            conn.close()
             raise HTTPException(status_code=404, detail="Share link not found")
         
         if result[0] != patient_id:
-            conn.close()
             raise HTTPException(status_code=403, detail="Unauthorized")
         
         # Revoke the link
-        cursor.execute("""
+        execute_query("""
             UPDATE patient_share_links
             SET revoked = 1
             WHERE share_token = ?
         """, (share_token,))
-        
-        conn.commit()
-        conn.close()
         
         return {"message": "Share link revoked successfully", "share_token": share_token}
         
@@ -3660,32 +3371,28 @@ async def get_patient_share_links(patient_id: str):
     Patient can see and manage their shares
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
+        rows = execute_query("""
             SELECT share_token, created_at, expires_at, access_count, max_accesses, 
                    revoked, format, recipient_email
             FROM patient_share_links
             WHERE patient_id = ?
             ORDER BY created_at DESC
-        """, (patient_id,))
+        """, (patient_id,), fetch='all') or []
         
         shares = []
-        for row in cursor.fetchall():
+        for row in rows:
             shares.append({
                 "share_token": row[0],
                 "created_at": row[1],
                 "expires_at": row[2],
-                "access_count": row[3],
-                "max_accesses": row[4],
-                "revoked": bool(row[5]),
+                "access_count": row[3] or 0,
+                "max_accesses": row[4] or 1,
+                "revoked": bool(row[5]) if row[5] is not None else False,
                 "format": row[6],
                 "recipient_email": row[7],
                 "status": "revoked" if row[5] else "expired" if datetime.fromisoformat(row[2]) < datetime.now() else "active"
             })
         
-        conn.close()
         return {"share_links": shares, "total": len(shares)}
         
     except Exception as e:
@@ -3699,19 +3406,16 @@ async def get_patient_download_history(patient_id: str):
     HIPAA tracking - who accessed patient data
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
+        rows = execute_query("""
             SELECT request_type, format, requested_at, status, delivery_method
             FROM patient_data_requests
             WHERE patient_id = ?
             ORDER BY requested_at DESC
             LIMIT 50
-        """, (patient_id,))
+        """, (patient_id,), fetch='all') or []
         
         history = []
-        for row in cursor.fetchall():
+        for row in rows:
             history.append({
                 "request_type": row[0],
                 "format": row[1],
@@ -3720,7 +3424,6 @@ async def get_patient_download_history(patient_id: str):
                 "delivery_method": row[4]
             })
         
-        conn.close()
         return {"download_history": history, "total": len(history)}
         
     except Exception as e:
@@ -3742,13 +3445,8 @@ async def run_federated_training(
     """
     try:
         # Verify admin
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT admin_id FROM admin_accounts WHERE admin_id = ?", (admin_id,), fetch='one'):
             raise HTTPException(status_code=403, detail="Unauthorized")
-        conn.close()
         
         # Simulate federated training
         coordinator, summary = simulate_federated_training(num_rounds=num_rounds)
@@ -4984,19 +4682,14 @@ async def get_audit_logs(limit: int = 50, patient_id: Optional[str] = None):
 async def get_audit_stats():
     """Get audit trail statistics"""
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
+        result = execute_query("SELECT COUNT(*) FROM predictions", (), fetch='one')
+        total = result[0] if result else 0
         
-        cursor.execute("SELECT COUNT(*) FROM predictions")
-        total = cursor.fetchone()[0]
+        result = execute_query("SELECT COUNT(*) FROM predictions WHERE used_genetics = 1", (), fetch='one')
+        with_genetics = result[0] if result else 0
         
-        cursor.execute("SELECT COUNT(*) FROM predictions WHERE used_genetics = 1")
-        with_genetics = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM predictions WHERE risk_category = 'High Risk'")
-        high_risk = cursor.fetchone()[0]
-        
-        conn.close()
+        result = execute_query("SELECT COUNT(*) FROM predictions WHERE risk_category = 'High Risk'", (), fetch='one')
+        high_risk = result[0] if result else 0
         
         return {
             "total_predictions": total,
@@ -6619,26 +6312,26 @@ async def save_chat_history(request: SaveChatRequest):
     key = f"{request.session_id or 'default'}:{request.patient_id}"
     _chat_histories[key] = [msg.dict() for msg in request.messages]
     
-    # Also persist to SQLite for durability
+    # Also persist to PostgreSQL for durability
     try:
-        conn = sqlite3.connect('data/chat_history.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS chat_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT,
-                patient_id TEXT,
-                messages TEXT,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(session_id, patient_id)
+        # Try to update existing, then insert if not exists
+        existing = execute_query(
+            "SELECT id FROM chat_history WHERE session_id = ? AND patient_id = ?",
+            (request.session_id or 'default', request.patient_id),
+            fetch='one'
+        )
+        if existing:
+            execute_query(
+                "UPDATE chat_history SET messages = ?, updated_at = ? WHERE session_id = ? AND patient_id = ?",
+                (json.dumps([msg.dict() for msg in request.messages]), datetime.now().isoformat(), 
+                 request.session_id or 'default', request.patient_id)
             )
-        ''')
-        cursor.execute('''
-            INSERT OR REPLACE INTO chat_history (session_id, patient_id, messages, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (request.session_id or 'default', request.patient_id, json.dumps([msg.dict() for msg in request.messages])))
-        conn.commit()
-        conn.close()
+        else:
+            execute_query(
+                "INSERT INTO chat_history (session_id, patient_id, messages, updated_at) VALUES (?, ?, ?, ?)",
+                (request.session_id or 'default', request.patient_id, 
+                 json.dumps([msg.dict() for msg in request.messages]), datetime.now().isoformat())
+            )
     except Exception as e:
         print(f"Failed to save chat to DB: {e}")
     
@@ -6659,17 +6352,14 @@ async def load_chat_history(request: LoadChatRequest):
     
     # Try database
     try:
-        conn = sqlite3.connect('data/chat_history.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT messages FROM chat_history 
-            WHERE session_id = ? AND patient_id = ?
-        ''', (request.session_id or 'default', request.patient_id))
-        row = cursor.fetchone()
-        conn.close()
+        row = execute_query(
+            "SELECT messages FROM chat_history WHERE session_id = ? AND patient_id = ?",
+            (request.session_id or 'default', request.patient_id),
+            fetch='one'
+        )
         
         if row:
-            messages = json.loads(row[0])
+            messages = json.loads(row[0]) if row[0] else []
             _chat_histories[key] = messages  # Cache it
             return {"messages": messages, "source": "database"}
     except Exception as e:
@@ -6747,19 +6437,15 @@ async def save_patient_clinical_data(request: SavePatientDataRequest):
     - Requires user authentication
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         now = datetime.now().isoformat()
         data = request.patient_data
         
         # Check if patient exists
-        cursor.execute("SELECT patient_id FROM patient_records WHERE patient_id = ?", (data.patient_id,))
-        exists = cursor.fetchone()
+        exists = execute_query("SELECT patient_id FROM patient_records WHERE patient_id = ?", (data.patient_id,), fetch='one')
         
         if exists:
             # Update existing record
-            cursor.execute("""
+            execute_query("""
                 UPDATE patient_records SET
                     updated_at = ?, updated_by = ?,
                     age = COALESCE(?, age),
@@ -6792,7 +6478,7 @@ async def save_patient_clinical_data(request: SavePatientDataRequest):
             action = "updated"
         else:
             # Create new record
-            cursor.execute("""
+            execute_query("""
                 INSERT INTO patient_records (
                     patient_id, created_at, updated_at, updated_by,
                     age, sex, bmi, bp_systolic, bp_diastolic,
@@ -6812,13 +6498,10 @@ async def save_patient_clinical_data(request: SavePatientDataRequest):
             action = "created"
         
         # Audit log
-        cursor.execute("""
+        execute_query("""
             INSERT INTO patient_data_audit (timestamp, patient_id, action, user_id, user_role, details)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (now, data.patient_id, action, request.user_id, request.user_role, f"Clinical data {action}"))
-        
-        conn.commit()
-        conn.close()
         
         return {
             "status": "success",
@@ -6844,38 +6527,29 @@ async def get_patient_clinical_data(
     - Returns empty if patient not found (allows manual entry)
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Get patient data
-        cursor.execute("""
+        row = execute_query("""
             SELECT age, sex, bmi, bp_systolic, bp_diastolic,
                    total_cholesterol, hdl, ldl, triglycerides,
                    hba1c, egfr, smoking_pack_years, exercise_hours_weekly,
                    has_diabetes, on_bp_medication, family_history_score,
                    created_at, updated_at, updated_by
             FROM patient_records WHERE patient_id = ?
-        """, (patient_id,))
-        
-        row = cursor.fetchone()
+        """, (patient_id,), fetch='one')
         
         # Audit log (even for not found - shows intent)
-        cursor.execute("""
+        execute_query("""
             INSERT INTO patient_data_audit (timestamp, patient_id, action, user_id, user_role, details)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (datetime.now().isoformat(), patient_id, "viewed", user_id, user_role, 
               "Data loaded" if row else "Patient not found"))
-        conn.commit()
         
         if not row:
-            conn.close()
             return {
                 "found": False,
                 "patient_id": patient_id,
                 "message": "No existing data. Manual entry required."
             }
-        
-        conn.close()
         
         return {
             "found": True,
@@ -6927,26 +6601,18 @@ async def delete_patient_clinical_data(
         if user_role not in ['patient', 'admin']:
             raise HTTPException(status_code=403, detail="Only patients or admins can delete patient data")
         
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Check if exists
-        cursor.execute("SELECT patient_id FROM patient_records WHERE patient_id = ?", (patient_id,))
-        if not cursor.fetchone():
-            conn.close()
+        if not execute_query("SELECT patient_id FROM patient_records WHERE patient_id = ?", (patient_id,), fetch='one'):
             raise HTTPException(status_code=404, detail="Patient record not found")
         
         # Delete the record
-        cursor.execute("DELETE FROM patient_records WHERE patient_id = ?", (patient_id,))
+        execute_query("DELETE FROM patient_records WHERE patient_id = ?", (patient_id,))
         
         # Audit log (critical for compliance)
-        cursor.execute("""
+        execute_query("""
             INSERT INTO patient_data_audit (timestamp, patient_id, action, user_id, user_role, details)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (datetime.now().isoformat(), patient_id, "deleted", user_id, user_role, f"Reason: {reason}"))
-        
-        conn.commit()
-        conn.close()
         
         return {
             "status": "deleted",
@@ -6973,19 +6639,13 @@ async def get_patient_data_audit(
     - Patients can see who accessed their data
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
+        rows = execute_query("""
             SELECT timestamp, action, user_id, user_role, details
             FROM patient_data_audit
             WHERE patient_id = ?
             ORDER BY timestamp DESC
             LIMIT 100
-        """, (patient_id,))
-        
-        rows = cursor.fetchall()
-        conn.close()
+        """, (patient_id,), fetch='all') or []
         
         return {
             "patient_id": patient_id,
