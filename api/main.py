@@ -7994,8 +7994,8 @@ async def add_patient_care_note(
 @app.post("/encounters/find-or-create-draft")
 async def find_or_create_draft_encounter(
     request: dict,
-    user_role: str = Header("doctor", alias="X-User-Role"),
-    user_id: str = Header("anonymous", alias="X-User-ID")
+    user_role: Optional[str] = Header(default="doctor", alias="X-User-Role"),
+    user_id: Optional[str] = Header(default="anonymous", alias="X-User-ID")
 ):
     """
     Find existing DRAFT encounter for patient, or create new one.
