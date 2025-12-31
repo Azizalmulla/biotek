@@ -7689,7 +7689,13 @@ async def add_patient_care_note(
 @app.get("/encounters/test-endpoint")
 async def test_encounter_endpoint():
     """Simple test to verify encounters endpoint is reachable"""
-    return {"status": "ok", "message": "Encounters endpoint is working", "version": "v2-request-fix", "timestamp": datetime.now().isoformat()}
+    return {"status": "ok", "message": "Encounters endpoint is working", "version": "v3-dict-body", "timestamp": datetime.now().isoformat()}
+
+
+@app.post("/encounters/test-post")
+async def test_encounter_post():
+    """Test POST with no parameters"""
+    return {"status": "ok", "encounter_id": f"ENC-TEST-{uuid.uuid4().hex[:8].upper()}"}
 
 
 @app.post("/encounters/draft")
