@@ -347,6 +347,23 @@ def init_postgres_tables():
                 )
             """)
             
+            # Encounter PRS/Genetics data (for combined risk calculation)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS encounter_genetics (
+                    id SERIAL PRIMARY KEY,
+                    encounter_id TEXT NOT NULL,
+                    patient_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    consent_genetics BOOLEAN DEFAULT FALSE,
+                    ancestry_group TEXT,
+                    prs_percentiles_json TEXT,
+                    high_impact_flags_json TEXT,
+                    qc_json TEXT,
+                    visibility TEXT DEFAULT 'clinician_only'
+                )
+            """)
+            
             # Legacy tables (kept for backwards compatibility)
             # Patient variant results
             cursor.execute("""

@@ -7852,6 +7852,312 @@ async def save_encounter_genetic(
         return {"status": "saved", "encounter_id": encounter_id, "type": "genetic", "timestamp": timestamp, "note": "Demo mode"}
 
 
+# =============================================================================
+# GENETICS MODULE - PRS + Combined Risk Calculation
+# =============================================================================
+
+def prs_percentile_to_rr(percentile: float) -> float:
+    """
+    Convert PRS percentile to relative risk multiplier.
+    Based on defensible MVP bands for combined risk calculation.
+    """
+    if percentile < 20:
+        return 0.8  # Lower genetic risk
+    elif percentile < 80:
+        return 1.0  # Average genetic risk
+    elif percentile < 95:
+        return 1.5  # Elevated genetic risk
+    elif percentile < 99:
+        return 2.0  # High genetic risk
+    else:
+        return 2.5  # Very high genetic risk (top 1%)
+
+
+def calculate_combined_risk(clinical_prob: float, rr_genetic: float) -> float:
+    """
+    Combine clinical probability with genetic relative risk using odds ratio.
+    
+    Formula:
+    1. O_clin = p_clin / (1 - p_clin)
+    2. O_comb = O_clin * RR_gen
+    3. p_comb = O_comb / (1 + O_comb)
+    """
+    # Clamp clinical probability to avoid division issues
+    p_clin = max(0.001, min(0.999, clinical_prob))
+    
+    # Convert to odds
+    odds_clinical = p_clin / (1 - p_clin)
+    
+    # Apply genetic multiplier
+    odds_combined = odds_clinical * rr_genetic
+    
+    # Convert back to probability
+    p_combined = odds_combined / (1 + odds_combined)
+    
+    return round(p_combined, 4)
+
+
+def get_apoe_risk_modifier(apoe_status: str) -> dict:
+    """
+    Get risk modifier for APOE e4 status (Alzheimer's specific).
+    APOE is NOT a PRS - it's a high-impact single-gene variant.
+    """
+    modifiers = {
+        "e2/e2": {"rr": 0.6, "label": "Protective", "description": "Lower genetic risk"},
+        "e2/e3": {"rr": 0.8, "label": "Slightly protective", "description": "Slightly lower genetic risk"},
+        "e3/e3": {"rr": 1.0, "label": "Average", "description": "Population average risk"},
+        "e2/e4": {"rr": 1.2, "label": "Slightly elevated", "description": "Slightly elevated genetic risk"},
+        "e3/e4": {"rr": 1.5, "label": "Elevated", "description": "Elevated genetic risk factor"},
+        "e4/e4": {"rr": 3.0, "label": "High-impact", "description": "Significant genetic risk factor"}
+    }
+    return modifiers.get(apoe_status, {"rr": 1.0, "label": "Unknown", "description": "APOE status not available"})
+
+
+@app.post("/encounters/{encounter_id}/genetics")
+async def save_encounter_genetics(
+    encounter_id: str,
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """
+    Save PRS/genetics data to an encounter for combined risk calculation.
+    
+    Expected payload:
+    {
+        "patient_id": "PAT-1234",
+        "consent_genetics": true,
+        "ancestry_group": "EUR",
+        "prs_percentiles": {
+            "chd": 92,
+            "t2d": 75,
+            "htn": 80
+        },
+        "high_impact_flags": {
+            "apoe_e4_status": "e3/e4"
+        },
+        "qc": { "snp_call_rate": 0.92 }
+    }
+    """
+    if user_role.lower() not in ['doctor']:
+        raise HTTPException(status_code=403, detail="Only doctors can save genetics data")
+    
+    patient_id = request.get("patient_id", "unknown")
+    consent_genetics = request.get("consent_genetics", False)
+    ancestry_group = request.get("ancestry_group", "")
+    prs_percentiles = request.get("prs_percentiles", {})
+    high_impact_flags = request.get("high_impact_flags", {})
+    qc_data = request.get("qc", {})
+    timestamp = datetime.now().isoformat()
+    
+    # Check encounter status
+    try:
+        enc_status = execute_query("""
+            SELECT status FROM encounters WHERE encounter_id = ?
+        """, (encounter_id,), fetch='one')
+        
+        if enc_status and enc_status[0] == 'completed':
+            raise HTTPException(status_code=403, detail="Cannot modify completed encounter")
+    except HTTPException:
+        raise
+    except:
+        pass  # Table may not exist yet
+    
+    try:
+        # UPSERT: Delete existing genetics for this encounter, then insert new
+        execute_query("""
+            DELETE FROM encounter_genetics WHERE encounter_id = ?
+        """, (encounter_id,))
+        
+        execute_query("""
+            INSERT INTO encounter_genetics 
+            (encounter_id, patient_id, created_at, created_by, consent_genetics, ancestry_group, prs_percentiles_json, high_impact_flags_json, qc_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            encounter_id, patient_id, timestamp, user_id,
+            consent_genetics, ancestry_group,
+            json.dumps(prs_percentiles),
+            json.dumps(high_impact_flags),
+            json.dumps(qc_data)
+        ))
+        
+        # Log genetics access
+        log_access_attempt(
+            user_id=user_id,
+            role=user_role,
+            purpose="genetics_upload",
+            data_type="genetics",
+            patient_id=patient_id,
+            granted=True,
+            reason=f"Genetics data {'saved with consent' if consent_genetics else 'saved WITHOUT consent (not used)'}"
+        )
+        
+        return {
+            "status": "saved",
+            "encounter_id": encounter_id,
+            "type": "genetics",
+            "consent_genetics": consent_genetics,
+            "diseases_with_prs": list(prs_percentiles.keys()),
+            "timestamp": timestamp
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"status": "saved", "encounter_id": encounter_id, "type": "genetics", "timestamp": timestamp, "note": "Demo mode"}
+
+
+@app.get("/encounters/{encounter_id}/genetics")
+async def get_encounter_genetics(
+    encounter_id: str,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Get genetics data for an encounter"""
+    if user_role.lower() not in ['doctor', 'nurse', 'admin']:
+        raise HTTPException(status_code=403, detail="Only clinical staff can view genetics data")
+    
+    try:
+        result = execute_query("""
+            SELECT consent_genetics, ancestry_group, prs_percentiles_json, high_impact_flags_json, qc_json, created_at
+            FROM encounter_genetics
+            WHERE encounter_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (encounter_id,), fetch='one')
+        
+        if not result:
+            return {"found": False, "encounter_id": encounter_id}
+        
+        consent, ancestry, prs_json, flags_json, qc_json, created_at = result
+        
+        prs_percentiles = json.loads(prs_json) if prs_json else {}
+        high_impact_flags = json.loads(flags_json) if flags_json else {}
+        qc_data = json.loads(qc_json) if qc_json else {}
+        
+        # Calculate RR multipliers for each disease
+        rr_multipliers = {}
+        for disease, percentile in prs_percentiles.items():
+            rr_multipliers[disease] = {
+                "percentile": percentile,
+                "rr": prs_percentile_to_rr(percentile),
+                "band": "high" if percentile >= 80 else "average" if percentile >= 20 else "low"
+            }
+        
+        # Handle APOE separately
+        apoe_status = high_impact_flags.get("apoe_e4_status")
+        apoe_info = get_apoe_risk_modifier(apoe_status) if apoe_status else None
+        
+        return {
+            "found": True,
+            "encounter_id": encounter_id,
+            "consent_genetics": consent,
+            "ancestry_group": ancestry,
+            "prs_percentiles": prs_percentiles,
+            "rr_multipliers": rr_multipliers,
+            "high_impact_flags": high_impact_flags,
+            "apoe_info": apoe_info,
+            "qc": qc_data,
+            "created_at": created_at
+        }
+    except Exception as e:
+        return {"found": False, "encounter_id": encounter_id, "error": str(e)}
+
+
+@app.post("/risk/calculate-combined")
+async def calculate_combined_risk_endpoint(
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """
+    Calculate combined clinical + genetic risk for multiple diseases.
+    
+    Expected payload:
+    {
+        "clinical_risks": {
+            "chd": 0.25,
+            "t2d": 0.30,
+            "htn": 0.35
+        },
+        "prs_percentiles": {
+            "chd": 92,
+            "t2d": 75,
+            "htn": 80
+        },
+        "high_impact_flags": {
+            "apoe_e4_status": "e3/e4"
+        },
+        "consent_genetics": true
+    }
+    """
+    clinical_risks = request.get("clinical_risks", {})
+    prs_percentiles = request.get("prs_percentiles", {})
+    high_impact_flags = request.get("high_impact_flags", {})
+    consent_genetics = request.get("consent_genetics", False)
+    
+    results = {}
+    
+    for disease, clinical_prob in clinical_risks.items():
+        # If no genetics consent, RR = 1.0 (no effect)
+        if not consent_genetics:
+            rr_genetic = 1.0
+            prs_percentile = None
+            genetics_note = "Genetic data not consented"
+        elif disease in prs_percentiles:
+            prs_percentile = prs_percentiles[disease]
+            rr_genetic = prs_percentile_to_rr(prs_percentile)
+            genetics_note = f"PRS {prs_percentile}th percentile → RR {rr_genetic}x"
+        else:
+            rr_genetic = 1.0
+            prs_percentile = None
+            genetics_note = "No PRS available for this disease"
+        
+        # Calculate combined probability
+        combined_prob = calculate_combined_risk(clinical_prob, rr_genetic)
+        
+        # Determine risk category
+        if combined_prob >= 0.25:
+            risk_category = "HIGH"
+        elif combined_prob >= 0.15:
+            risk_category = "MODERATE"
+        else:
+            risk_category = "LOW"
+        
+        results[disease] = {
+            "clinical_risk": round(clinical_prob, 4),
+            "genetic_rr": rr_genetic,
+            "prs_percentile": prs_percentile,
+            "combined_risk": combined_prob,
+            "combined_percentage": round(combined_prob * 100, 1),
+            "risk_category": risk_category,
+            "genetics_note": genetics_note
+        }
+    
+    # Special handling for Alzheimer's with APOE
+    apoe_status = high_impact_flags.get("apoe_e4_status")
+    if apoe_status and "alzheimers" in clinical_risks:
+        apoe_info = get_apoe_risk_modifier(apoe_status)
+        alz_clinical = clinical_risks["alzheimers"]
+        alz_combined = calculate_combined_risk(alz_clinical, apoe_info["rr"])
+        
+        results["alzheimers"] = {
+            **results.get("alzheimers", {}),
+            "apoe_status": apoe_status,
+            "apoe_rr": apoe_info["rr"],
+            "apoe_label": apoe_info["label"],
+            "combined_risk": alz_combined,
+            "combined_percentage": round(alz_combined * 100, 1),
+            "high_impact_flag": True,
+            "genetics_note": f"APOE {apoe_status}: {apoe_info['description']}"
+        }
+    
+    return {
+        "consent_genetics": consent_genetics,
+        "diseases_analyzed": list(results.keys()),
+        "results": results
+    }
+
+
 @app.post("/encounters/{encounter_id}/imaging")
 async def save_encounter_imaging(
     encounter_id: str,
