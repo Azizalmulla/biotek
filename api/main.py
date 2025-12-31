@@ -2148,8 +2148,8 @@ async def login_staff(request: StaffLoginRequest):
         
         # Check if account is locked
         if locked_until:
-            from datetime import datetime
-            if datetime.fromisoformat(locked_until) > datetime.now():
+            lock_time = datetime.fromisoformat(locked_until)
+            if lock_time > datetime.now():
                 raise HTTPException(status_code=403, detail="Account is locked. Try again later.")
         
         # Verify password
