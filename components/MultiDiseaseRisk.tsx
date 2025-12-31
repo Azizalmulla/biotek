@@ -133,6 +133,13 @@ export default function MultiDiseaseRisk({
   const [isFinalized, setIsFinalized] = useState(encounterStatus === 'finalized');
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
   
+  // Sync encounter ID from parent prop
+  useEffect(() => {
+    if (initialEncounterId && initialEncounterId !== currentEncounterId) {
+      setCurrentEncounterId(initialEncounterId);
+    }
+  }, [initialEncounterId]);
+  
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoadingPatient, setIsLoadingPatient] = useState(false);
   const [patientDataSource, setPatientDataSource] = useState<'default' | 'loaded' | 'manual'>('default');
@@ -999,26 +1006,34 @@ export default function MultiDiseaseRisk({
                     </div>
                   </div>
                 </div>
-                {!isFinalized && patientId && currentEncounterId && (
-                  <motion.button
-                    onClick={handleFinalizeEncounter}
-                    disabled={isFinalizingEncounter}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="px-6 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {isFinalizingEncounter ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Finalizing...
-                      </>
+                {!isFinalized && (
+                  <>
+                    {patientId && currentEncounterId ? (
+                      <motion.button
+                        onClick={handleFinalizeEncounter}
+                        disabled={isFinalizingEncounter}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="px-6 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {isFinalizingEncounter ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Finalizing...
+                          </>
+                        ) : (
+                          <>
+                            <span>✓</span>
+                            Finalize Assessment
+                          </>
+                        )}
+                      </motion.button>
                     ) : (
-                      <>
-                        <span>✓</span>
-                        Finalize Assessment
-                      </>
+                      <div className="px-4 py-2 bg-amber-100 text-amber-800 text-sm rounded-lg">
+                        Select a patient to finalize
+                      </div>
                     )}
-                  </motion.button>
+                  </>
                 )}
               </div>
             </div>
