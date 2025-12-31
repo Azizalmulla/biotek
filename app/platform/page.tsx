@@ -869,7 +869,7 @@ export default function PlatformPage() {
                 </div>
               )}
               <div className="h-8 w-px bg-black/10" />
-              <span className="text-sm text-black/60">Dr. Smith</span>
+              <span className="text-sm text-black/60">{session?.fullName || 'Staff'}</span>
               <button 
                 onClick={handleSignOut}
                 className="bg-black text-white px-4 py-2 rounded-full text-sm hover:bg-black/90 transition-all"
