@@ -1163,19 +1163,19 @@ export default function MultiDiseaseRisk({
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            {/* Encounter Status Banner */}
+            {/* Assessment Status Banner */}
             <div className={`rounded-2xl p-4 border ${isFinalized ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{isFinalized ? '✅' : '📝'}</span>
                   <div>
                     <div className={`font-semibold ${isFinalized ? 'text-green-900' : 'text-amber-900'}`}>
-                      {isFinalized ? 'Assessment Finalized' : 'Draft Assessment'}
+                      {isFinalized ? 'Visit Complete' : 'Draft - Preview Only'}
                     </div>
                     <div className={`text-sm ${isFinalized ? 'text-green-700' : 'text-amber-700'}`}>
                       {isFinalized 
-                        ? 'This assessment has been saved and is visible to the patient.' 
-                        : 'Preview only. Click "Finalize Assessment" to save and make visible to patient.'}
+                        ? 'Assessment saved and visible to patient. Next analysis starts a new session.' 
+                        : 'Review results, then click "Complete Visit" to save and share with patient.'}
                     </div>
                   </div>
                 </div>
@@ -1192,12 +1192,12 @@ export default function MultiDiseaseRisk({
                         {isFinalizingEncounter ? (
                           <>
                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Finalizing...
+                            Saving...
                           </>
                         ) : (
                           <>
                             <span>✓</span>
-                            Finalize Assessment
+                            Complete Visit
                           </>
                         )}
                       </motion.button>

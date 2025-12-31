@@ -965,47 +965,23 @@ export default function PlatformPage() {
           />
         )}
         
-        {/* Active Draft Encounter Indicator */}
+        {/* Active Draft Encounter Indicator - Status only, finalize via Assessment button */}
         {currentEncounterId && session?.role === 'doctor' && encounterStatus === 'draft' && (
-          <div className="mb-4 bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-center justify-between">
+          <div className="mb-4 bg-stone-100 border border-stone-200 rounded-xl p-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
-                <span className="text-sm text-amber-800 font-bold">
-                  📝 Draft Encounter
+                <span className="w-2 h-2 bg-stone-400 rounded-full"></span>
+                <span className="text-sm text-stone-600">
+                  Session: {currentEncounterId?.slice(0, 16)}...
                 </span>
               </div>
-              <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                {currentEncounterId}
-              </span>
-              <span className="text-xs text-amber-600">
-                • Autosaving • Re-run analysis to update
-              </span>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowTimeline(true)}
-                className="text-xs bg-white border border-amber-300 text-amber-700 px-3 py-1.5 rounded-full hover:bg-amber-100 font-medium"
-              >
-                📋 View Timeline
-              </button>
-              <button
-                onClick={async () => {
-                  if (currentEncounterId) {
-                    await completeEncounter(currentEncounterId);
-                    setEncounterStatus('completed');
-                    // Clear encounter so next run creates new draft
-                    setTimeout(() => {
-                      setCurrentEncounterId(null);
-                      setEncounterStatus('none');
-                    }, 2000);
-                  }
-                }}
-                className="text-xs bg-green-600 text-white px-4 py-1.5 rounded-full hover:bg-green-700 font-medium flex items-center gap-1"
-              >
-                ✓ Complete & Lock Encounter
-              </button>
-            </div>
+            <button
+              onClick={() => setShowTimeline(true)}
+              className="text-xs bg-white border border-stone-200 text-stone-600 px-3 py-1.5 rounded-full hover:bg-stone-50 font-medium"
+            >
+              📋 View Timeline
+            </button>
           </div>
         )}
         
