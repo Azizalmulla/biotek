@@ -364,6 +364,25 @@ def init_postgres_tables():
                 )
             """)
             
+            # Patient genetic results (imported from external labs)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS patient_genetic_results (
+                    id SERIAL PRIMARY KEY,
+                    patient_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    imported_by TEXT NOT NULL,
+                    lab_name TEXT NOT NULL,
+                    lab_id TEXT,
+                    test_date TEXT,
+                    report_id TEXT,
+                    prs_json TEXT,
+                    high_impact_json TEXT,
+                    qc_json TEXT,
+                    model_version TEXT,
+                    consent_status TEXT DEFAULT 'pending'
+                )
+            """)
+            
             # Legacy tables (kept for backwards compatibility)
             # Patient variant results
             cursor.execute("""

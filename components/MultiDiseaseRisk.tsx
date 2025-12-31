@@ -233,19 +233,50 @@ export default function MultiDiseaseRisk({
   const [imagingData, setImagingData] = useState<ImagingData | null>(null);
   const [showDNAModal, setShowDNAModal] = useState(false);
   const [showImagingModal, setShowImagingModal] = useState(false);
-  const [showPRSModal, setShowPRSModal] = useState(false);
   const [dnaSequence, setDnaSequence] = useState('');
   
-  // PRS Genetics State
-  const [prsConsentGenetics, setPrsConsentGenetics] = useState(false);
-  const [prsAncestry, setPrsAncestry] = useState('EUR');
-  const [prsPercentiles, setPrsPercentiles] = useState<Record<string, number>>({
-    chd: 50,
-    t2d: 50,
-    htn: 50,
-  });
-  const [apoeStatus, setApoeStatus] = useState<string>('e3/e3');
-  const [prsDataLoaded, setPrsDataLoaded] = useState(false);
+  // Genetic Results State (from external lab)
+  const [geneticResults, setGeneticResults] = useState<{
+    has_genetic_data: boolean;
+    lab_source?: { lab_name: string; test_date: string; report_id: string };
+    prs?: Record<string, { percentile: number; relative_risk: number; ancestry: string; risk_band: string }>;
+    apoe_info?: { status: string; rr: number; label: string };
+    consent_status?: string;
+  } | null>(null);
+  const [geneticsLoading, setGeneticsLoading] = useState(false);
+  const [showGeneticsModal, setShowGeneticsModal] = useState(false);
+  const [geneticsImportJson, setGeneticsImportJson] = useState('');
+  const [geneticsImporting, setGeneticsImporting] = useState(false);
+  const [useGeneticsInRisk, setUseGeneticsInRisk] = useState(true);
+  
+  // Load genetic results when patient changes
+  useEffect(() => {
+    const loadGeneticResults = async () => {
+      if (!patientId) {
+        setGeneticResults(null);
+        return;
+      }
+      setGeneticsLoading(true);
+      try {
+        const response = await fetch(`${API_BASE}/patient/${patientId}/genetic-results`, {
+          headers: {
+            'X-User-ID': userId,
+            'X-User-Role': userRole,
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setGeneticResults(data);
+        }
+      } catch (err) {
+        console.error('Failed to load genetic results:', err);
+      } finally {
+        setGeneticsLoading(false);
+      }
+    };
+    loadGeneticResults();
+  }, [patientId, userId, userRole]);
+  
   const [dnaAnalyzing, setDnaAnalyzing] = useState(false);
   const [imagingFile, setImagingFile] = useState<File | null>(null);
   const [imagingAnalyzing, setImagingAnalyzing] = useState(false);
@@ -338,48 +369,28 @@ export default function MultiDiseaseRisk({
 
       const data = await response.json();
       
-      // Step 4: Save PRS genetics to encounter if available
-      if (encounterId && prsDataLoaded) {
-        try {
-          await fetch(`${API_BASE}/encounters/${encounterId}/genetics`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'X-User-ID': userId || 'unknown',
-              'X-User-Role': userRole || 'doctor'
-            },
-            body: JSON.stringify({
-              patient_id: patientId,
-              consent_genetics: prsConsentGenetics,
-              ancestry_group: prsAncestry,
-              prs_percentiles: prsPercentiles,
-              high_impact_flags: { apoe_e4_status: apoeStatus },
-              qc: { snp_call_rate: 0.95 }  // Demo QC
-            }),
-          });
-          console.log('[GENETICS] Saved PRS data to encounter:', encounterId);
-        } catch (e) {
-          console.log('Failed to save genetics to encounter:', e);
-        }
-      }
+      // Step 4: Check if patient has genetic data and if doctor enabled genetics in risk
+      const hasGeneticData = geneticResults?.has_genetic_data && useGeneticsInRisk;
       
-      // Step 5: Calculate combined risk if genetics consent is ON
+      // Step 5: Calculate combined risk if genetics data exists and is enabled
       let combinedRiskData: Record<string, any> = {};
-      if (prsDataLoaded && prsConsentGenetics) {
+      if (hasGeneticData && geneticResults?.prs) {
         try {
           // Map disease IDs to PRS keys
-          const diseaseMapping: Record<string, string> = {
-            'coronary_heart_disease': 'chd',
-            'type2_diabetes': 't2d',
-            'hypertension': 'htn',
+          const diseaseToApiKey: Record<string, string> = {
+            'coronary_heart_disease': 'coronary_heart_disease',
+            'type2_diabetes': 'type2_diabetes',
+            'hypertension': 'hypertension',
           };
           
           // Extract clinical risks from predictions
           const clinicalRisks: Record<string, number> = {};
+          const prsPercentiles: Record<string, number> = {};
+          
           Object.entries(data.predictions || {}).forEach(([diseaseId, pred]: [string, any]) => {
-            const prsKey = diseaseMapping[diseaseId];
-            if (prsKey) {
-              clinicalRisks[prsKey] = pred.risk_percentage / 100;
+            if (diseaseToApiKey[diseaseId] && geneticResults.prs?.[diseaseId]) {
+              clinicalRisks[diseaseId] = pred.risk_percentage / 100;
+              prsPercentiles[diseaseId] = geneticResults.prs[diseaseId].percentile;
             }
           });
           
@@ -393,8 +404,8 @@ export default function MultiDiseaseRisk({
             body: JSON.stringify({
               clinical_risks: clinicalRisks,
               prs_percentiles: prsPercentiles,
-              high_impact_flags: { apoe_e4_status: apoeStatus },
-              consent_genetics: prsConsentGenetics
+              high_impact_flags: geneticResults.apoe_info ? { apoe_e4_status: geneticResults.apoe_info.status } : {},
+              consent_genetics: true
             }),
           });
           
@@ -409,16 +420,10 @@ export default function MultiDiseaseRisk({
       
       // Step 6: Merge combined risk data into predictions
       const enhancedPredictions = { ...data.predictions };
-      const diseaseMapping: Record<string, string> = {
-        'chd': 'coronary_heart_disease',
-        't2d': 'type2_diabetes',
-        'htn': 'hypertension',
-      };
       
       if (combinedRiskData.results) {
-        Object.entries(combinedRiskData.results).forEach(([prsKey, riskData]: [string, any]) => {
-          const diseaseId = diseaseMapping[prsKey];
-          if (diseaseId && enhancedPredictions[diseaseId]) {
+        Object.entries(combinedRiskData.results).forEach(([diseaseId, riskData]: [string, any]) => {
+          if (enhancedPredictions[diseaseId]) {
             enhancedPredictions[diseaseId] = {
               ...enhancedPredictions[diseaseId],
               // Add combined risk data
@@ -444,18 +449,16 @@ export default function MultiDiseaseRisk({
         multi_modal: {
           clinical_data: true,
           genetic_analysis: geneticData?.dna_analyzed || false,
-          prs_analysis: prsDataLoaded && prsConsentGenetics,
-          prs_consent: prsConsentGenetics,
-          prs_ancestry: prsAncestry,
+          genetics_from_lab: hasGeneticData,
+          genetics_enabled: useGeneticsInRisk,
           prs_score: prsScore,
           imaging_analysis: imagingData?.images_analyzed ? true : false,
           imaging_findings: imagingData?.abnormalities || 0,
         },
-        genetics_summary: prsDataLoaded && prsConsentGenetics ? {
-          consent: prsConsentGenetics,
-          ancestry: prsAncestry,
-          prs_percentiles: prsPercentiles,
-          apoe_status: apoeStatus,
+        genetics_summary: hasGeneticData ? {
+          lab_source: geneticResults?.lab_source,
+          prs: geneticResults?.prs,
+          apoe_info: geneticResults?.apoe_info,
           combined_risk_calculated: !!combinedRiskData.results
         } : null
       };
@@ -1085,24 +1088,24 @@ export default function MultiDiseaseRisk({
 
         {/* Optional Data Integrations */}
         <div className="flex gap-3 mb-6">
-          {/* PRS Genetics Button */}
+          {/* Genetic Results Button */}
           <button
-            onClick={() => setShowPRSModal(true)}
+            onClick={() => setShowGeneticsModal(true)}
             className={`flex-1 p-3 rounded-xl border-2 border-dashed transition-all hover:scale-[1.02] cursor-pointer ${
-              prsDataLoaded && prsConsentGenetics ? 'border-purple-300 bg-purple-50' : 'border-stone-200 hover:border-purple-400 hover:bg-purple-50/50'
+              geneticResults?.has_genetic_data ? 'border-purple-300 bg-purple-50' : 'border-stone-200 hover:border-purple-400 hover:bg-purple-50/50'
             }`}
           >
             <div className="flex items-center gap-2">
               <span className="text-xl">🧬</span>
               <div className="text-left">
-                <div className="text-sm font-medium text-black">Genetic Risk (PRS)</div>
+                <div className="text-sm font-medium text-black">Genetic Results</div>
                 <div className="text-xs text-black/50">
-                  {prsDataLoaded && prsConsentGenetics 
-                    ? `✓ PRS for ${Object.keys(prsPercentiles).length} diseases • APOE: ${apoeStatus}` 
-                    : 'Click to add polygenic risk scores'}
+                  {geneticResults?.has_genetic_data 
+                    ? `✓ From ${geneticResults.lab_source?.lab_name} • ${Object.keys(geneticResults.prs || {}).length} PRS` 
+                    : 'No genetic data on file'}
                 </div>
               </div>
-              {prsDataLoaded && prsConsentGenetics && <span className="ml-auto text-purple-500">✓</span>}
+              {geneticResults?.has_genetic_data && <span className="ml-auto text-purple-500">✓</span>}
             </div>
           </button>
           
@@ -1573,15 +1576,15 @@ export default function MultiDiseaseRisk({
         )}
       </AnimatePresence>
 
-      {/* PRS Genetics Modal */}
+      {/* Genetics View/Import Modal */}
       <AnimatePresence>
-        {showPRSModal && (
+        {showGeneticsModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowPRSModal(false)}
+            onClick={() => setShowGeneticsModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -1595,160 +1598,211 @@ export default function MultiDiseaseRisk({
                   <span className="text-2xl">🧬</span>
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-black">Polygenic Risk Scores (PRS)</h3>
-                  <p className="text-sm text-black/60">Multi-disease genetic risk integration</p>
+                  <h3 className="text-xl font-bold text-black">Genetic Results</h3>
+                  <p className="text-sm text-black/60">External lab genetic testing data</p>
                 </div>
               </div>
 
-              {/* Consent Toggle */}
-              <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-xl">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-purple-900">Use Genetic Data</div>
-                    <div className="text-sm text-purple-700">Include PRS in combined risk calculation</div>
+              {/* Show existing genetic data or import option */}
+              {geneticResults?.has_genetic_data ? (
+                <div className="space-y-4">
+                  {/* Lab Source Info */}
+                  <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-medium text-purple-900">Lab Source</div>
+                      <span className="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded-full">Imported</span>
+                    </div>
+                    <div className="text-sm text-purple-700">
+                      <div><strong>Lab:</strong> {geneticResults.lab_source?.lab_name}</div>
+                      <div><strong>Test Date:</strong> {geneticResults.lab_source?.test_date}</div>
+                      <div><strong>Report ID:</strong> {geneticResults.lab_source?.report_id}</div>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => setPrsConsentGenetics(!prsConsentGenetics)}
-                    className={`w-14 h-8 rounded-full transition-all ${
-                      prsConsentGenetics ? 'bg-purple-600' : 'bg-gray-300'
-                    }`}
-                  >
-                    <div className={`w-6 h-6 bg-white rounded-full shadow transition-all ${
-                      prsConsentGenetics ? 'translate-x-7' : 'translate-x-1'
-                    }`} />
-                  </button>
-                </div>
-                {!prsConsentGenetics && (
-                  <div className="mt-2 text-xs text-purple-600">
-                    ⚠️ When OFF, genetic data will NOT affect risk calculations (RR = 1.0)
-                  </div>
-                )}
-              </div>
 
-              <div className="space-y-4">
-                {/* Ancestry Selection */}
-                <div>
-                  <label className="block text-sm font-medium text-black/70 mb-2">
-                    Ancestry Group
-                  </label>
-                  <select
-                    value={prsAncestry}
-                    onChange={(e) => setPrsAncestry(e.target.value)}
-                    className="w-full p-3 bg-white/50 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  >
-                    <option value="EUR">European (EUR)</option>
-                    <option value="AFR">African (AFR)</option>
-                    <option value="EAS">East Asian (EAS)</option>
-                    <option value="SAS">South Asian (SAS)</option>
-                    <option value="AMR">American (AMR)</option>
-                    <option value="MIX">Mixed/Other</option>
-                  </select>
-                  <div className="text-xs text-black/40 mt-1">
-                    PRS accuracy varies by ancestry. Results calibrated for selected population.
+                  {/* Toggle to include in risk */}
+                  <div className="p-4 bg-white/50 border border-stone-200 rounded-xl">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-black">Include in Risk Calculation</div>
+                        <div className="text-sm text-black/60">Apply genetic modifiers to combined risk</div>
+                      </div>
+                      <button
+                        onClick={() => setUseGeneticsInRisk(!useGeneticsInRisk)}
+                        className={`w-14 h-8 rounded-full transition-all ${
+                          useGeneticsInRisk ? 'bg-purple-600' : 'bg-gray-300'
+                        }`}
+                      >
+                        <div className={`w-6 h-6 bg-white rounded-full shadow transition-all ${
+                          useGeneticsInRisk ? 'translate-x-7' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                {/* PRS Percentiles */}
-                <div className="bg-white/50 rounded-xl p-4 border border-stone-200">
-                  <div className="text-sm font-medium text-black mb-3">PRS Percentiles by Disease</div>
-                  <div className="space-y-4">
-                    {[
-                      { key: 'chd', label: 'Coronary Heart Disease', icon: '❤️' },
-                      { key: 't2d', label: 'Type 2 Diabetes', icon: '🩸' },
-                      { key: 'htn', label: 'Hypertension', icon: '💓' },
-                    ].map(disease => (
-                      <div key={disease.key} className="flex items-center gap-3">
-                        <span className="text-xl w-8">{disease.icon}</span>
-                        <div className="flex-1">
-                          <div className="flex justify-between mb-1">
-                            <span className="text-sm text-black/70">{disease.label}</span>
-                            <span className="text-sm font-medium text-black">
-                              {prsPercentiles[disease.key]}th percentile
-                            </span>
+                  {/* PRS Results (Read-Only) */}
+                  <div className="bg-white/50 rounded-xl p-4 border border-stone-200">
+                    <div className="text-sm font-medium text-black mb-3">Polygenic Risk Scores</div>
+                    <div className="space-y-3">
+                      {Object.entries(geneticResults.prs || {}).map(([diseaseId, data]) => (
+                        <div key={diseaseId} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
+                          <div>
+                            <div className="text-sm font-medium text-black capitalize">
+                              {diseaseId.replace(/_/g, ' ')}
+                            </div>
+                            <div className="text-xs text-black/50">Ancestry: {data.ancestry}</div>
                           </div>
-                          <input
-                            type="range"
-                            min="1"
-                            max="99"
-                            value={prsPercentiles[disease.key]}
-                            onChange={(e) => setPrsPercentiles(prev => ({
-                              ...prev,
-                              [disease.key]: parseInt(e.target.value)
-                            }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                          />
-                          <div className="flex justify-between text-xs text-black/40 mt-1">
-                            <span>Lower risk</span>
-                            <span className={`font-medium ${
-                              prsPercentiles[disease.key] >= 95 ? 'text-red-600' :
-                              prsPercentiles[disease.key] >= 80 ? 'text-amber-600' :
-                              prsPercentiles[disease.key] < 20 ? 'text-green-600' : 'text-black/50'
+                          <div className="text-right">
+                            <div className="text-lg font-bold text-black">{data.percentile}th</div>
+                            <div className={`text-xs font-medium ${
+                              data.risk_band === 'high' ? 'text-red-600' :
+                              data.risk_band === 'low' ? 'text-green-600' : 'text-black/50'
                             }`}>
-                              RR: {prsPercentiles[disease.key] < 20 ? '0.8x' :
-                                   prsPercentiles[disease.key] < 80 ? '1.0x' :
-                                   prsPercentiles[disease.key] < 95 ? '1.5x' :
-                                   prsPercentiles[disease.key] < 99 ? '2.0x' : '2.5x'}
-                            </span>
-                            <span>Higher risk</span>
+                              RR: {data.relative_risk}x
+                            </div>
                           </div>
                         </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* APOE Status (if present) */}
+                  {geneticResults.apoe_info && (
+                    <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-medium text-amber-900">APOE Status</div>
+                          <div className="text-xs text-amber-700">High-impact variant (Alzheimer's)</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-amber-900">{geneticResults.apoe_info.status}</div>
+                          <div className="text-xs text-amber-700">{geneticResults.apoe_info.label} (RR: {geneticResults.apoe_info.rr}x)</div>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                  )}
 
-                {/* APOE Status (Alzheimer's) */}
-                <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xl">🧩</span>
-                    <div>
-                      <div className="text-sm font-medium text-amber-900">APOE Status (Alzheimer's)</div>
-                      <div className="text-xs text-amber-700">High-impact single gene variant (not PRS)</div>
+                  {/* Disclaimer */}
+                  <div className="bg-blue-50 rounded-xl p-3 border border-blue-200">
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-500">ℹ️</span>
+                      <div className="text-xs text-blue-800">
+                        <strong>Important:</strong> Genetics informs risk estimation but does not diagnose disease.
+                        Clinical diagnosis is based on measured values (HbA1c, BP, etc.), not genetic scores.
+                      </div>
                     </div>
                   </div>
-                  <select
-                    value={apoeStatus}
-                    onChange={(e) => setApoeStatus(e.target.value)}
-                    className="w-full p-3 bg-white/50 rounded-xl border border-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="e2/e2">e2/e2 - Protective (RR 0.6x)</option>
-                    <option value="e2/e3">e2/e3 - Slightly protective (RR 0.8x)</option>
-                    <option value="e3/e3">e3/e3 - Average (RR 1.0x)</option>
-                    <option value="e2/e4">e2/e4 - Slightly elevated (RR 1.2x)</option>
-                    <option value="e3/e4">e3/e4 - Elevated (RR 1.5x)</option>
-                    <option value="e4/e4">e4/e4 - High-impact (RR 3.0x)</option>
-                  </select>
-                </div>
 
-                {/* Disclaimer */}
-                <div className="bg-blue-50 rounded-xl p-3 border border-blue-200">
-                  <div className="flex items-start gap-2">
-                    <span className="text-blue-500">ℹ️</span>
-                    <div className="text-xs text-blue-800">
-                      <strong>Important:</strong> Genetics informs risk estimation but does not diagnose disease.
-                      Clinical diagnosis is based on measured values (HbA1c, BP, etc.), not genetic scores.
+                  <button
+                    onClick={() => setShowGeneticsModal(false)}
+                    className="w-full py-3 rounded-xl font-medium bg-purple-600 text-white hover:bg-purple-700"
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* No genetic data message */}
+                  <div className="p-6 bg-stone-100 border border-stone-200 rounded-xl text-center">
+                    <div className="text-4xl mb-3">🧬</div>
+                    <div className="text-lg font-medium text-black mb-2">No Genetic Data on File</div>
+                    <div className="text-sm text-black/60 mb-4">
+                      Genetic testing results can be imported from external labs.
                     </div>
                   </div>
-                </div>
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowPRSModal(false)}
-                    className="flex-1 py-3 rounded-xl border border-black/20 text-black/60 hover:bg-black/5"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      setPrsDataLoaded(true);
-                      setShowPRSModal(false);
-                    }}
-                    className="flex-1 py-3 rounded-xl font-medium bg-purple-600 text-white hover:bg-purple-700"
-                  >
-                    🧬 Apply Genetic Data
-                  </button>
+                  {/* Import Section */}
+                  <div className="p-4 bg-white/50 border border-stone-200 rounded-xl">
+                    <div className="text-sm font-medium text-black mb-3">Import Lab Results (JSON)</div>
+                    <textarea
+                      value={geneticsImportJson}
+                      onChange={(e) => setGeneticsImportJson(e.target.value)}
+                      placeholder={`{
+  "lab_name": "Clinical Genetics Lab",
+  "test_date": "2025-12-15",
+  "report_id": "RPT-001234",
+  "results": {
+    "prs": {
+      "coronary_heart_disease": { "percentile": 85, "ancestry": "EUR" },
+      "type2_diabetes": { "percentile": 42, "ancestry": "EUR" }
+    },
+    "high_impact_variants": {
+      "apoe_status": "e3/e4"
+    }
+  }
+}`}
+                      className="w-full h-40 p-3 bg-white rounded-xl border border-stone-200 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowGeneticsModal(false)}
+                      className="flex-1 py-3 rounded-xl border border-black/20 text-black/60 hover:bg-black/5"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!geneticsImportJson.trim() || !patientId) return;
+                        setGeneticsImporting(true);
+                        try {
+                          const importData = JSON.parse(geneticsImportJson);
+                          const response = await fetch(`${API_BASE}/patient/${patientId}/genetic-results/import`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'X-User-ID': userId || 'unknown',
+                              'X-User-Role': userRole || 'doctor'
+                            },
+                            body: JSON.stringify(importData)
+                          });
+                          if (response.ok) {
+                            // Refresh genetic results
+                            const refreshResponse = await fetch(`${API_BASE}/patient/${patientId}/genetic-results`, {
+                              headers: {
+                                'X-User-ID': userId || 'unknown',
+                                'X-User-Role': userRole || 'doctor'
+                              }
+                            });
+                            if (refreshResponse.ok) {
+                              const data = await refreshResponse.json();
+                              setGeneticResults(data);
+                            }
+                            setGeneticsImportJson('');
+                          }
+                        } catch (e) {
+                          console.error('Failed to import genetics:', e);
+                        } finally {
+                          setGeneticsImporting(false);
+                        }
+                      }}
+                      disabled={!geneticsImportJson.trim() || geneticsImporting}
+                      className={`flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 ${
+                        !geneticsImportJson.trim() || geneticsImporting
+                          ? 'bg-black/10 text-black/40'
+                          : 'bg-purple-600 text-white hover:bg-purple-700'
+                      }`}
+                    >
+                      {geneticsImporting ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Importing...
+                        </>
+                      ) : (
+                        <>🧬 Import Results</>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Request Testing Placeholder */}
+                  <div className="text-center pt-4 border-t border-stone-200">
+                    <div className="text-xs text-black/40 mb-2">Or request genetic testing</div>
+                    <button className="text-sm text-purple-600 hover:text-purple-700 font-medium">
+                      📋 Order Genetic Panel →
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </motion.div>
           </motion.div>
         )}

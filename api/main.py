@@ -8158,6 +8158,245 @@ async def calculate_combined_risk_endpoint(
     }
 
 
+# =============================================================================
+# GENETIC RESULTS IMPORT - External Lab Integration
+# =============================================================================
+
+GENETICS_MODEL_VERSION = "v1.0.0"
+
+@app.post("/patient/{patient_id}/genetic-results/import")
+async def import_genetic_results(
+    patient_id: str,
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """
+    Import genetic results from external lab.
+    
+    Expected payload (from genetic testing provider):
+    {
+        "lab_name": "Clinical Genetics Lab",
+        "lab_id": "CGL-12345",
+        "test_date": "2025-12-15",
+        "report_id": "RPT-2025-001234",
+        "results": {
+            "prs": {
+                "coronary_heart_disease": { "percentile": 85, "ancestry": "EUR", "snp_count": 1200000 },
+                "type2_diabetes": { "percentile": 42, "ancestry": "EUR", "snp_count": 980000 },
+                "hypertension": { "percentile": 78, "ancestry": "EUR", "snp_count": 1100000 }
+            },
+            "high_impact_variants": {
+                "apoe_status": "e3/e4"
+            },
+            "qc": {
+                "call_rate": 0.98,
+                "ancestry_match": true
+            }
+        }
+    }
+    """
+    if user_role.lower() not in ['doctor', 'admin']:
+        raise HTTPException(status_code=403, detail="Only doctors can import genetic results")
+    
+    lab_name = request.get("lab_name", "Unknown Lab")
+    lab_id = request.get("lab_id", "")
+    test_date = request.get("test_date", "")
+    report_id = request.get("report_id", "")
+    results = request.get("results", {})
+    
+    prs_data = results.get("prs", {})
+    high_impact = results.get("high_impact_variants", {})
+    qc_data = results.get("qc", {})
+    
+    timestamp = datetime.now().isoformat()
+    
+    # Validate required fields
+    if not prs_data and not high_impact:
+        raise HTTPException(status_code=400, detail="No genetic results provided")
+    
+    try:
+        # Store in patient_genetic_results table
+        execute_query("""
+            INSERT INTO patient_genetic_results 
+            (patient_id, created_at, imported_by, lab_name, lab_id, test_date, report_id, 
+             prs_json, high_impact_json, qc_json, model_version, consent_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            patient_id, timestamp, user_id, lab_name, lab_id, test_date, report_id,
+            json.dumps(prs_data), json.dumps(high_impact), json.dumps(qc_data),
+            GENETICS_MODEL_VERSION, "pending"
+        ))
+        
+        # Log audit event
+        log_access_attempt(
+            user_id=user_id,
+            role=user_role,
+            purpose="genetics_import",
+            data_type="genetic_results",
+            patient_id=patient_id,
+            granted=True,
+            reason=f"Imported genetic results from {lab_name} (Report: {report_id})"
+        )
+        
+        # Calculate RR multipliers for stored PRS
+        prs_with_rr = {}
+        for disease, data in prs_data.items():
+            percentile = data.get("percentile", 50)
+            prs_with_rr[disease] = {
+                **data,
+                "relative_risk": prs_percentile_to_rr(percentile),
+                "risk_band": "high" if percentile >= 80 else "average" if percentile >= 20 else "low"
+            }
+        
+        return {
+            "status": "imported",
+            "patient_id": patient_id,
+            "lab_name": lab_name,
+            "report_id": report_id,
+            "test_date": test_date,
+            "diseases_with_prs": list(prs_data.keys()),
+            "high_impact_variants": list(high_impact.keys()),
+            "prs_with_rr": prs_with_rr,
+            "imported_at": timestamp,
+            "imported_by": user_id,
+            "model_version": GENETICS_MODEL_VERSION
+        }
+    except Exception as e:
+        print(f"[GENETICS] Import error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to import genetic results: {str(e)}")
+
+
+@app.get("/patient/{patient_id}/genetic-results")
+async def get_patient_genetic_results(
+    patient_id: str,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """
+    Get patient's genetic results (imported from external lab).
+    Returns empty if no genetic data on file.
+    """
+    if user_role.lower() not in ['doctor', 'nurse', 'admin']:
+        raise HTTPException(status_code=403, detail="Only clinical staff can view genetic results")
+    
+    try:
+        result = execute_query("""
+            SELECT lab_name, lab_id, test_date, report_id, prs_json, high_impact_json, 
+                   qc_json, created_at, imported_by, model_version, consent_status
+            FROM patient_genetic_results
+            WHERE patient_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (patient_id,), fetch='one')
+        
+        if not result:
+            return {
+                "has_genetic_data": False,
+                "patient_id": patient_id,
+                "message": "No genetic data on file"
+            }
+        
+        (lab_name, lab_id, test_date, report_id, prs_json, high_impact_json,
+         qc_json, created_at, imported_by, model_version, consent_status) = result
+        
+        prs_data = json.loads(prs_json) if prs_json else {}
+        high_impact = json.loads(high_impact_json) if high_impact_json else {}
+        qc_data = json.loads(qc_json) if qc_json else {}
+        
+        # Add RR calculations to PRS data
+        prs_with_rr = {}
+        for disease, data in prs_data.items():
+            percentile = data.get("percentile", 50)
+            prs_with_rr[disease] = {
+                **data,
+                "relative_risk": prs_percentile_to_rr(percentile),
+                "risk_band": "high" if percentile >= 80 else "average" if percentile >= 20 else "low"
+            }
+        
+        # Handle APOE if present
+        apoe_info = None
+        if "apoe_status" in high_impact:
+            apoe_info = get_apoe_risk_modifier(high_impact["apoe_status"])
+            apoe_info["status"] = high_impact["apoe_status"]
+        
+        # Log access
+        log_access_attempt(
+            user_id=user_id,
+            role=user_role,
+            purpose="genetics_view",
+            data_type="genetic_results",
+            patient_id=patient_id,
+            granted=True,
+            reason="Viewed genetic results"
+        )
+        
+        return {
+            "has_genetic_data": True,
+            "patient_id": patient_id,
+            "lab_source": {
+                "lab_name": lab_name,
+                "lab_id": lab_id,
+                "test_date": test_date,
+                "report_id": report_id
+            },
+            "prs": prs_with_rr,
+            "high_impact_variants": high_impact,
+            "apoe_info": apoe_info,
+            "qc": qc_data,
+            "imported_at": created_at,
+            "imported_by": imported_by,
+            "model_version": model_version,
+            "consent_status": consent_status
+        }
+    except Exception as e:
+        print(f"[GENETICS] Fetch error: {e}")
+        return {
+            "has_genetic_data": False,
+            "patient_id": patient_id,
+            "message": "No genetic data on file"
+        }
+
+
+@app.patch("/patient/{patient_id}/genetic-results/consent")
+async def update_genetic_consent(
+    patient_id: str,
+    request: dict,
+    user_role: str = Header("doctor", alias="X-User-Role"),
+    user_id: str = Header("anonymous", alias="X-User-ID")
+):
+    """Update consent status for using genetic data in risk calculations."""
+    if user_role.lower() not in ['doctor', 'admin']:
+        raise HTTPException(status_code=403, detail="Only doctors can update genetic consent")
+    
+    consent_status = request.get("consent_status", "pending")  # granted, denied, pending
+    
+    try:
+        execute_query("""
+            UPDATE patient_genetic_results 
+            SET consent_status = ?
+            WHERE patient_id = ?
+        """, (consent_status, patient_id))
+        
+        log_access_attempt(
+            user_id=user_id,
+            role=user_role,
+            purpose="genetics_consent_update",
+            data_type="genetic_results",
+            patient_id=patient_id,
+            granted=True,
+            reason=f"Consent status updated to: {consent_status}"
+        )
+        
+        return {
+            "status": "updated",
+            "patient_id": patient_id,
+            "consent_status": consent_status
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update consent: {str(e)}")
+
+
 @app.post("/encounters/{encounter_id}/imaging")
 async def save_encounter_imaging(
     encounter_id: str,
