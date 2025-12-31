@@ -1715,9 +1715,10 @@ export default function MultiDiseaseRisk({
                         </div>
                         
                         {/* File Upload Area */}
-                        <label className="block cursor-pointer">
+                        <label htmlFor="genetics-file-upload" className="block cursor-pointer">
                           <div className="border-2 border-dashed border-purple-300 rounded-xl p-8 hover:border-purple-500 hover:bg-purple-50/50 transition-all">
                             <input
+                              id="genetics-file-upload"
                               type="file"
                               accept=".pdf,.csv,.txt,.json,.docx,.doc,.png,.jpg,.jpeg,.webp,.heic"
                               className="hidden"
