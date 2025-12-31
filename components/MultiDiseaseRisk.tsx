@@ -240,6 +240,7 @@ export default function MultiDiseaseRisk({
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
     setError(null);
+    setIsFinalized(false); // Reset finalized state for new analysis
 
     try {
       // Track which patient this analysis is for
