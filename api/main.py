@@ -29,7 +29,7 @@ ml_disease_model.RealDiseaseModel = RealDiseaseModel
 ml_module.train_real_data = ml_train_real_data
 ml_module.disease_model = ml_disease_model
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
