@@ -1452,6 +1452,56 @@ async def debug_test_draft(request: dict):
         return {"error": str(e), "debug": results}
 
 
+@app.get("/debug/check-staff-accounts")
+async def debug_check_staff_accounts():
+    """TEMPORARY: Debug staff accounts to find login issue"""
+    from database import execute_query
+    results = {"accounts": [], "test_password": None}
+    
+    try:
+        # List all staff accounts
+        accounts = execute_query("""
+            SELECT user_id, email, role, activated, failed_login_attempts, locked_until,
+                   LEFT(password_hash, 20) as hash_prefix
+            FROM staff_accounts
+        """, (), fetch='all') or []
+        
+        for acc in accounts:
+            results["accounts"].append({
+                "user_id": acc[0],
+                "email": acc[1],
+                "role": acc[2],
+                "activated": acc[3],
+                "failed_attempts": acc[4],
+                "locked_until": acc[5],
+                "hash_prefix": acc[6]
+            })
+        
+        # Test password hashing
+        test_hash = hash_password("demo123")
+        results["test_password"] = {
+            "demo123_hash_prefix": test_hash[:20],
+            "verify_demo123": verify_password("demo123", test_hash)
+        }
+        
+        # Try to verify against first account
+        if accounts:
+            first_acc = execute_query(
+                "SELECT password_hash FROM staff_accounts WHERE user_id = ?",
+                (accounts[0][0],), fetch='one'
+            )
+            if first_acc:
+                results["verify_first_account"] = {
+                    "user_id": accounts[0][0],
+                    "verify_demo123": verify_password("demo123", first_acc[0])
+                }
+        
+    except Exception as e:
+        results["error"] = str(e)
+    
+    return results
+
+
 @app.get("/debug/test-encounter")
 async def debug_test_encounter():
     """TEMPORARY: Test encounter creation to debug errors"""
