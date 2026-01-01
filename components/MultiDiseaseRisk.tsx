@@ -35,6 +35,16 @@ interface DiseaseRisk {
   combined_risk?: number;
   combined_percentage?: number;
   genetics_note?: string;
+  // APPLICABILITY: For diseases not applicable to patient (e.g., breast cancer for males)
+  status?: 'NOT_APPLICABLE' | 'APPLICABLE';
+  reason?: string;
+  reason_detail?: string;
+  suppressed?: boolean;
+  metadata?: {
+    applicable_sexes?: number[];
+    patient_sex?: number;
+    patient_age?: number;
+  };
 }
 
 interface DataQuality {
@@ -1376,14 +1386,43 @@ export default function MultiDiseaseRisk({
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {Object.values(result.predictions)
                   .filter(p => !activeCategory || DISEASE_CATEGORIES[activeCategory as keyof typeof DISEASE_CATEGORIES]?.includes(p.disease_id))
-                  .sort((a, b) => b.risk_score - a.risk_score)
+                  .sort((a, b) => {
+                    // Put NOT_APPLICABLE at the end
+                    if (a.status === 'NOT_APPLICABLE' && b.status !== 'NOT_APPLICABLE') return 1;
+                    if (b.status === 'NOT_APPLICABLE' && a.status !== 'NOT_APPLICABLE') return -1;
+                    return (b.risk_score || 0) - (a.risk_score || 0);
+                  })
                   .map((disease) => (
                     <motion.div
                       key={disease.disease_id}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className={`p-4 rounded-2xl border ${getRiskBg(getDisplayLabel(disease))} transition-all hover:shadow-lg cursor-pointer`}
+                      className={`p-4 rounded-2xl border ${
+                        disease.status === 'NOT_APPLICABLE' 
+                          ? 'bg-stone-100 border-stone-200 opacity-60' 
+                          : `${getRiskBg(getDisplayLabel(disease))} hover:shadow-lg cursor-pointer`
+                      } transition-all`}
                     >
+                      {/* NOT_APPLICABLE diseases get special rendering */}
+                      {disease.status === 'NOT_APPLICABLE' ? (
+                        <>
+                          <div className="flex items-start justify-between mb-3">
+                            <span className="text-2xl opacity-50">{DISEASE_ICONS[disease.disease_id] || '🏥'}</span>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-stone-300 text-stone-600">
+                              N/A
+                            </span>
+                          </div>
+                          <div className="text-sm font-semibold text-stone-500 mb-1 line-clamp-2">
+                            {disease.name}
+                          </div>
+                          <div className="text-xs text-stone-400 mt-2">
+                            {disease.reason === 'sex_not_applicable' 
+                              ? `Not applicable for ${disease.metadata?.patient_sex === 1 ? 'male' : 'female'} patients`
+                              : disease.reason_detail || 'Not applicable'}
+                          </div>
+                        </>
+                      ) : (
+                        <>
                       <div className="flex items-start justify-between mb-3">
                         <span className="text-2xl">{DISEASE_ICONS[disease.disease_id] || '🏥'}</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r ${getRiskColor(getDisplayLabel(disease))} text-white`}>
@@ -1396,7 +1435,7 @@ export default function MultiDiseaseRisk({
                       <div className="flex items-end justify-between">
                         <div>
                           <div className="text-2xl font-bold text-black">
-                            {disease.risk_percentage.toFixed(0)}%
+                            {disease.risk_percentage?.toFixed(0) || 0}%
                           </div>
                           {/* Confidence Interval */}
                           {disease.calibration && (
@@ -1479,6 +1518,8 @@ export default function MultiDiseaseRisk({
                         <div className="mt-2 text-xs text-black/50 text-center capitalize">
                           {disease.calibration.risk_vs_population}
                         </div>
+                      )}
+                        </>
                       )}
                     </motion.div>
                   ))}

@@ -75,6 +75,12 @@ from authorization import (
     ROLE_PERMISSIONS, log_access_attempt
 )
 
+# Import disease metadata for applicability gates
+from disease_metadata import (
+    DISEASE_METADATA, check_applicability, get_features_for_disease,
+    get_all_metadata, ApplicabilityStatus
+)
+
 # Import authentication utilities
 from auth import (
     hash_password, verify_password, create_access_token,
@@ -3716,6 +3722,64 @@ async def model_info():
     }
 
 
+@app.get("/model/disease-metadata")
+async def get_disease_metadata_endpoint():
+    """
+    Get disease metadata including applicability gates and feature provenance.
+    
+    Returns:
+        - Per-disease applicability (sex, age restrictions)
+        - Feature lists used by each model
+        - Dataset provenance (real vs synthetic)
+        - Model quality metrics
+    """
+    return {
+        "diseases": get_all_metadata(),
+        "total_diseases": len(DISEASE_METADATA),
+        "feature_sets": {
+            "with_sex": FEATURES_WITH_SEX if 'FEATURES_WITH_SEX' in dir() else [],
+            "without_sex": BASE_FEATURES if 'BASE_FEATURES' in dir() else []
+        },
+        "documentation": {
+            "applicable_sexes": "0=Female, 1=Male. Empty list means all.",
+            "includes_sex": "Whether sex is actually used as a model feature",
+            "dataset_type": "real=trained on patient data, synthetic=generated",
+            "sex_stratified": "Whether training data had real sex distribution"
+        }
+    }
+
+
+@app.get("/model/check-applicability/{disease_id}")
+async def check_disease_applicability(disease_id: str, sex: int, age: int):
+    """
+    Check if a specific disease prediction is applicable for a patient.
+    
+    Args:
+        disease_id: The disease to check
+        sex: Patient sex (0=Female, 1=Male)
+        age: Patient age in years
+    
+    Returns:
+        Applicability status with reason if not applicable
+    """
+    result = check_applicability(disease_id, sex, age)
+    
+    # Convert metadata to dict for JSON serialization
+    if result.get("metadata"):
+        meta = result["metadata"]
+        result["metadata"] = {
+            "disease_id": meta.disease_id,
+            "display_name": meta.display_name,
+            "applicable_sexes": meta.applicable_sexes,
+            "min_age": meta.min_age,
+            "max_age": meta.max_age,
+            "includes_sex": meta.includes_sex,
+            "dataset_type": meta.dataset_type.value
+        }
+    
+    return result
+
+
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_risk(patient: PatientInput):
     """
@@ -4281,6 +4345,30 @@ async def predict_multi_disease(
         return pd.DataFrame([features], columns=feature_names)
     
     for disease_id, config in DISEASE_CONFIG.items():
+        # =================================================================
+        # APPLICABILITY GATE: Check if prediction is valid for this patient
+        # =================================================================
+        applicability = check_applicability(disease_id, patient.sex, patient.age)
+        
+        if not applicability["can_predict"]:
+            # Disease not applicable for this patient - skip ML, return suppressed result
+            predictions[disease_id] = {
+                "disease_id": disease_id,
+                "name": config.get("name", disease_id),
+                "status": "NOT_APPLICABLE",
+                "reason": applicability.get("reason"),
+                "reason_detail": applicability.get("reason_detail"),
+                "risk_score": None,
+                "risk_percentage": None,
+                "suppressed": True,
+                "metadata": {
+                    "applicable_sexes": applicability["metadata"].applicable_sexes if applicability["metadata"] else None,
+                    "patient_sex": patient.sex,
+                    "patient_age": patient.age
+                }
+            }
+            continue  # Skip to next disease - DO NOT run ML
+        
         # Get clinical risk from validated equations (60% weight)
         clinical_data = clinical_risks.get(disease_id, {})
         clinical_risk = clinical_data.get("risk_score", 0.05)

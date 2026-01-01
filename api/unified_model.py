@@ -28,9 +28,16 @@ from typing import Dict, List, Optional, Tuple
 import warnings
 warnings.filterwarnings('ignore')
 
+# Import disease metadata for feature provenance
+from disease_metadata import (
+    DISEASE_METADATA, get_features_for_disease, 
+    check_applicability, BASE_FEATURES, FEATURES_WITH_SEX
+)
+
 # =============================================================================
 # COMMON CLINICAL FEATURES (what we actually collect from patients)
 # =============================================================================
+# Full feature set - individual diseases may use subsets based on metadata
 COMMON_FEATURES = [
     'age',              # Years
     'sex',              # 0=Female, 1=Male
@@ -226,31 +233,36 @@ class UnifiedDiseaseModel:
             
         elif disease == 'breast_cancer':
             df = pd.read_csv(data_dir / "breast_cancer_wisconsin.csv")
-            # This is a cell feature dataset, not clinical - create synthetic clinical mapping
+            # Wisconsin dataset is tumor cell features - NO SEX DATA (all female patients)
+            # We use clinical features but DO NOT include sex in model
+            # Sex applicability is handled at prediction time via disease_metadata
+            n = len(df)
             harmonized = pd.DataFrame({
-                'age': 55,  # Average
-                'sex': 0,  # Female
-                'bmi': 27,
-                'bp_systolic': 125,
-                'bp_diastolic': 80,
-                'total_cholesterol': 210,
-                'hdl': 55,
-                'ldl': 130,
-                'triglycerides': 140,
-                'hba1c': 5.6,
-                'egfr': 85,
-                'smoking': 0,
-                'family_history': 1,  # Often relevant for breast cancer
+                'age': np.random.normal(55, 12, n).clip(30, 80),  # Realistic age distribution
+                'sex': 0,  # Placeholder - NOT USED IN MODEL (see disease_metadata)
+                'bmi': np.random.normal(27, 5, n).clip(18, 40),
+                'bp_systolic': np.random.normal(125, 15, n).clip(100, 160),
+                'bp_diastolic': np.random.normal(80, 10, n).clip(60, 100),
+                'total_cholesterol': np.random.normal(210, 35, n).clip(140, 300),
+                'hdl': np.random.normal(55, 12, n).clip(30, 90),
+                'ldl': np.random.normal(130, 30, n).clip(70, 200),
+                'triglycerides': np.random.normal(140, 50, n).clip(50, 300),
+                'hba1c': np.random.normal(5.6, 0.8, n).clip(4.5, 8.0),
+                'egfr': np.random.normal(85, 15, n).clip(45, 120),
+                'smoking': np.random.choice([0, 1, 2], n, p=[0.6, 0.25, 0.15]),
+                'family_history': np.random.binomial(1, 0.35, n),  # Higher for breast cancer
             }, index=df.index)
             target = df['target']  # Already 0/1 in this dataset
             
         else:
             # Default: create minimal synthetic data for diseases without good datasets
+            # IMPORTANT: Do NOT include random sex - it creates spurious correlations
+            # Sex is set to 0 as placeholder but excluded from model features via metadata
             n_samples = 500
             np.random.seed(42 + hash(disease) % 1000)
             harmonized = pd.DataFrame({
                 'age': np.random.normal(55, 15, n_samples).clip(20, 90),
-                'sex': np.random.binomial(1, 0.5, n_samples),
+                'sex': 0,  # Placeholder - NOT USED IN MODEL for synthetic datasets
                 'bmi': np.random.normal(27, 5, n_samples).clip(18, 45),
                 'bp_systolic': np.random.normal(130, 20, n_samples).clip(90, 200),
                 'bp_diastolic': np.random.normal(82, 12, n_samples).clip(60, 120),
@@ -263,7 +275,7 @@ class UnifiedDiseaseModel:
                 'smoking': np.random.choice([0, 1, 2], n_samples, p=[0.5, 0.3, 0.2]),
                 'family_history': np.random.binomial(1, 0.3, n_samples),
             })
-            # Generate target based on risk factors
+            # Generate target based on risk factors (NO SEX - would be spurious)
             risk_score = (
                 (harmonized['age'] - 50) / 40 * 0.3 +
                 harmonized['bmi'] / 40 * 0.2 +
