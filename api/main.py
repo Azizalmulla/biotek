@@ -3876,6 +3876,7 @@ DISEASE_CONFIG = {
     "breast_cancer": {"name": "Breast Cancer", "icon": "🎀"},
     "colorectal_cancer": {"name": "Colorectal Cancer", "icon": "🔬"},
     "alzheimers_disease": {"name": "Alzheimer's Disease", "icon": "🧩"},
+    "prostate_cancer": {"name": "Prostate Cancer", "icon": "♂️"},
 }
 
 class MultiDiseaseInput(BaseModel):

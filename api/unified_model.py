@@ -66,7 +66,8 @@ DISEASES = [
     'copd',
     'breast_cancer',
     'colorectal_cancer',
-    'alzheimers_disease'
+    'alzheimers_disease',
+    'prostate_cancer'  # Male-only
 ]
 
 @dataclass
@@ -253,6 +254,73 @@ class UnifiedDiseaseModel:
                 'family_history': np.random.binomial(1, 0.35, n),  # Higher for breast cancer
             }, index=df.index)
             target = df['target']  # Already 0/1 in this dataset
+        
+        elif disease == 'prostate_cancer':
+            # Real prostate cancer dataset - MALE ONLY
+            df = pd.read_csv(data_dir / "kaggle_prostate_cancer.csv")
+            n = len(df)
+            # Map prostate-specific features to common clinical features
+            # lpsa (log PSA) is key predictor - higher = higher risk
+            harmonized = pd.DataFrame({
+                'age': df['age'],
+                'sex': 1,  # Male only - but NOT used in model per metadata
+                'bmi': np.random.normal(27, 4, n).clip(20, 38),  # Imputed
+                'bp_systolic': np.random.normal(130, 15, n).clip(100, 170),
+                'bp_diastolic': np.random.normal(82, 10, n).clip(60, 100),
+                'total_cholesterol': np.random.normal(200, 35, n).clip(140, 280),
+                'hdl': np.random.normal(45, 12, n).clip(25, 80),
+                'ldl': np.random.normal(125, 30, n).clip(70, 200),
+                'triglycerides': np.random.normal(150, 50, n).clip(60, 300),
+                'hba1c': np.random.normal(5.8, 0.9, n).clip(4.5, 9.0),
+                'egfr': np.random.normal(80, 18, n).clip(40, 120),
+                'smoking': np.random.choice([0, 1, 2], n, p=[0.4, 0.35, 0.25]),
+                'family_history': np.random.binomial(1, 0.25, n),
+            }, index=df.index)
+            # Target: high lpsa (log PSA > 2.5) or high gleason score
+            target = ((df['lpsa'] > 2.5) | (df['gleason'] >= 7)).astype(int)
+            
+        elif disease == 'copd':
+            # Real COPD dataset from Kaggle
+            df = pd.read_csv(data_dir / "copd_kaggle_real.csv")
+            n = len(df)
+            harmonized = pd.DataFrame({
+                'age': df['AGE'],
+                'sex': df['gender'].map({1: 1, 0: 0, 2: 0}).fillna(0).astype(int),
+                'bmi': np.random.normal(26, 5, n).clip(18, 40),
+                'bp_systolic': 130 + df['hypertension'] * 20,
+                'bp_diastolic': 82 + df['hypertension'] * 10,
+                'total_cholesterol': np.random.normal(200, 35, n).clip(140, 280),
+                'hdl': np.random.normal(48, 12, n).clip(25, 85),
+                'ldl': np.random.normal(120, 30, n).clip(60, 200),
+                'triglycerides': np.random.normal(145, 50, n).clip(50, 300),
+                'hba1c': 5.5 + df['Diabetes'] * 1.5,
+                'egfr': np.random.normal(78, 20, n).clip(30, 120),
+                'smoking': df['smoking'].clip(0, 2),
+                'family_history': np.random.binomial(1, 0.2, n),
+            }, index=df.index)
+            target = df['copd'].map({1: 0, 2: 0, 3: 1, 4: 1}).fillna(0).astype(int)  # Severe = positive
+        
+        elif disease == 'alzheimers_disease':
+            # Real Alzheimer's OASIS dataset
+            df = pd.read_csv(data_dir / "alzheimers_oasis_real.csv")
+            n = len(df)
+            harmonized = pd.DataFrame({
+                'age': df['Age'],
+                'sex': df['M/F'].map({'M': 1, 'F': 0}).fillna(0).astype(int),
+                'bmi': np.random.normal(26, 4, n).clip(18, 38),
+                'bp_systolic': np.random.normal(135, 18, n).clip(100, 180),
+                'bp_diastolic': np.random.normal(80, 12, n).clip(55, 110),
+                'total_cholesterol': np.random.normal(210, 40, n).clip(140, 300),
+                'hdl': np.random.normal(52, 14, n).clip(25, 90),
+                'ldl': np.random.normal(130, 35, n).clip(60, 220),
+                'triglycerides': np.random.normal(140, 55, n).clip(50, 350),
+                'hba1c': np.random.normal(5.7, 0.9, n).clip(4.5, 9.0),
+                'egfr': np.random.normal(72, 22, n).clip(25, 120),
+                'smoking': np.random.choice([0, 1, 2], n, p=[0.55, 0.30, 0.15]),
+                'family_history': np.random.binomial(1, 0.35, n),
+            }, index=df.index)
+            # CDR > 0 indicates cognitive impairment
+            target = (df['CDR'] > 0).astype(int)
             
         else:
             # Default: create minimal synthetic data for diseases without good datasets

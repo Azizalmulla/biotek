@@ -96,12 +96,13 @@ const DISEASE_ICONS: Record<string, string> = {
   breast_cancer: '🎀',
   colorectal_cancer: '🔬',
   alzheimers_disease: '🧩',
+  prostate_cancer: '♂️',
 };
 
 const DISEASE_CATEGORIES = {
   cardiovascular: ['coronary_heart_disease', 'hypertension', 'stroke', 'heart_failure', 'atrial_fibrillation'],
   metabolic: ['type2_diabetes', 'nafld', 'chronic_kidney_disease'],
-  cancer: ['breast_cancer', 'colorectal_cancer'],
+  cancer: ['breast_cancer', 'colorectal_cancer', 'prostate_cancer'],
   neurological: ['alzheimers_disease'],
   respiratory: ['copd'],
 };

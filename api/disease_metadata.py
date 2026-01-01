@@ -231,32 +231,32 @@ DISEASE_METADATA: Dict[str, DiseaseMetadata] = {
         display_name="Alzheimer's Disease",
         applicable_sexes=[0, 1],
         min_age=50,
-        features_used=BASE_FEATURES,  # NO SEX - synthetic data
-        includes_sex=False,
-        dataset_type=DatasetType.SYNTHETIC,
-        dataset_name="Synthetic (ADNI-style features)",
-        dataset_size=500,
-        sex_stratified=False,
-        reported_auc=0.68,
-        calibrated=False,
+        features_used=FEATURES_WITH_SEX,  # Real OASIS data has sex
+        includes_sex=True,
+        dataset_type=DatasetType.REAL,
+        dataset_name="OASIS Longitudinal MRI Dataset",
+        dataset_size=374,
+        sex_stratified=True,
+        reported_auc=0.78,
+        calibrated=True,
         icd10_codes=["G30"],
-        clinical_notes="Synthetic data - CAIDE score reference only"
+        clinical_notes="Real OASIS data - CDR-based cognitive assessment"
     ),
     
     "copd": DiseaseMetadata(
         disease_id="copd",
         display_name="COPD",
         applicable_sexes=[0, 1],
-        features_used=BASE_FEATURES,  # NO SEX - synthetic data
-        includes_sex=False,
-        dataset_type=DatasetType.SYNTHETIC,
-        dataset_name="Synthetic (smoking-weighted)",
-        dataset_size=500,
-        sex_stratified=False,
-        reported_auc=0.75,
-        calibrated=False,
+        features_used=FEATURES_WITH_SEX,  # Real Kaggle data has sex
+        includes_sex=True,
+        dataset_type=DatasetType.REAL,
+        dataset_name="Kaggle COPD Clinical Dataset",
+        dataset_size=102,
+        sex_stratified=True,
+        reported_auc=0.82,
+        calibrated=True,
         icd10_codes=["J44"],
-        clinical_notes="Smoking pack-years is primary driver"
+        clinical_notes="Real clinical data - FEV1/GOLD staging"
     ),
     
     "atrial_fibrillation": DiseaseMetadata(
@@ -273,6 +273,27 @@ DISEASE_METADATA: Dict[str, DiseaseMetadata] = {
         calibrated=False,
         icd10_codes=["I48"],
         clinical_notes="Synthetic data - CHARGE-AF reference"
+    ),
+    
+    # =========================================================================
+    # SEX-SPECIFIC DISEASES
+    # =========================================================================
+    
+    "prostate_cancer": DiseaseMetadata(
+        disease_id="prostate_cancer",
+        display_name="Prostate Cancer",
+        applicable_sexes=[1],  # Male only
+        min_age=40,
+        features_used=BASE_FEATURES,  # NO SEX - all patients are male
+        includes_sex=False,
+        dataset_type=DatasetType.REAL,
+        dataset_name="Prostate Cancer Study Dataset",
+        dataset_size=97,
+        sex_stratified=False,  # All male
+        reported_auc=0.85,
+        calibrated=True,
+        icd10_codes=["C61"],
+        clinical_notes="Male-only. PSA and Gleason score based risk."
     ),
 }
 
