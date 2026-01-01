@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://biotek-api.onrender.com';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://biotek-production.up.railway.app';
 
 interface PatientSelectorProps {
   onSelect: (patientId: string, encounterId?: string) => void;
