@@ -1604,23 +1604,33 @@ export default function PlatformPage() {
                               );
                             }
                             
-                            // Tables and content
+                            // Tables and content - handle metrics table properly
                             if (trimmed.includes('|')) {
                               const rows = trimmed.split('\n').filter(r => r.includes('|') && !r.match(/^\|[-:]+\|/));
+                              // Detect number of columns from first row
+                              const firstRowCells = rows[0]?.split('|').filter(c => c.trim()) || [];
+                              const numCols = Math.min(firstRowCells.length, 4);
+                              const gridClass = numCols === 4 ? 'grid-cols-4' : numCols === 3 ? 'grid-cols-3' : 'grid-cols-2';
+                              
                               return (
                                 <div key={idx} className="bg-white rounded-2xl border border-black/10 overflow-hidden">
                                   {rows.map((row, rowIdx) => {
                                     const cells = row.split('|').filter(c => c.trim());
                                     const isHeader = rowIdx === 0;
                                     return (
-                                      <div key={rowIdx} className={`grid grid-cols-2 ${isHeader ? 'bg-stone-100 font-semibold' : 'border-t border-black/5'}`}>
-                                        {cells.map((cell, cellIdx) => (
-                                          <div key={cellIdx} className={`p-4 text-sm ${cellIdx === 0 ? 'font-medium text-black' : 'text-black/70'}`}>
-                                            {cell.replace(/\*\*/g, '').replace(/<br>/g, '\n').split('\n').map((line, lineIdx) => (
-                                              <div key={lineIdx} className={lineIdx > 0 ? 'mt-1' : ''}>{line.replace(/^-\s*/, '• ').trim()}</div>
-                                            ))}
-                                          </div>
-                                        ))}
+                                      <div key={rowIdx} className={`grid ${gridClass} ${isHeader ? 'bg-stone-100 font-semibold' : 'border-t border-black/5'}`}>
+                                        {cells.slice(0, numCols).map((cell, cellIdx) => {
+                                          // Clean cell content - skip if only dashes
+                                          let content = cell.replace(/\*\*/g, '').trim();
+                                          if (content === '--' || content === '-' || content === '—') {
+                                            content = 'N/A';
+                                          }
+                                          return (
+                                            <div key={cellIdx} className={`p-4 text-sm ${cellIdx === 0 ? 'font-medium text-black' : 'text-black/70'}`}>
+                                              {content}
+                                            </div>
+                                          );
+                                        })}
                                       </div>
                                     );
                                   })}
