@@ -1,17 +1,17 @@
 # BioTeK - Enterprise Disease Risk Prediction Platform
 
-![BioTeK Platform](https://img.shields.io/badge/Status-Production%20Ready-green) ![Accuracy](https://img.shields.io/badge/Accuracy-83%25-blue) ![AUC](https://img.shields.io/badge/AUC-0.890-blue) ![Diseases](https://img.shields.io/badge/Diseases-12-purple)
+![BioTeK Platform](https://img.shields.io/badge/Status-Production%20Ready-green) ![Accuracy](https://img.shields.io/badge/Accuracy-83%25-blue) ![AUC](https://img.shields.io/badge/AUC-0.890-blue) ![Diseases](https://img.shields.io/badge/Diseases-13-purple)
 
 **Privacy-Preserving AI for Genomic Medicine**
 
-BioTeK is an enterprise-grade clinical decision support system that predicts 12 chronic disease risks using XGBoost+LightGBM ensemble models, Evo 2 DNA analysis (NVIDIA NIM), and GLM-4.5V medical vision AI (OpenRouter). Built for healthcare institutions that demand both accuracy and patient privacy.
+BioTeK is an enterprise-grade clinical decision support system that predicts 13 chronic disease risks using CatBoost + XGBoost/LightGBM ensemble models, Evo 2 DNA analysis (NVIDIA NIM), and GLM-4.5V medical vision AI (OpenRouter). Built for healthcare institutions that demand both accuracy and patient privacy.
 
 ---
 
 ## 🎯 Core Features
 
 ### Multi-Disease Prediction
-- **XGBoost + LightGBM Ensemble** - 83% accuracy, 0.890 AUC-ROC across 12 diseases
+- **ML Ensemble (CatBoost + XGBoost/LightGBM)** - 83% average AUC across 13 diseases
 - **55 Clinical Biomarkers** - Metabolic, liver, kidney, cardiac, inflammatory, blood panels
 - **5 Polygenic Risk Panels** - 59 GWAS-validated SNPs for genetic risk
 - **Explainable AI** - SHAP TreeExplainer for feature contributions
@@ -268,7 +268,7 @@ Get model metadata and performance metrics
 - [x] Federated learning simulation
 - [x] Audit trail system
 - [x] SHAP value computation
-- [x] Multi-disease models (12 diseases)
+- [x] Multi-disease models (13 diseases)
 - [x] Cloud deployment (Vercel + Railway)
 - [x] Evo 2 DNA analysis (NVIDIA NIM)
 - [x] GLM-4.5V Medical Vision (OpenRouter)

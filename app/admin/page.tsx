@@ -870,7 +870,7 @@ export default function AdminDashboard() {
                           <div className="text-green-800/60 text-xs">API Status</div>
                         </div>
                         <div>
-                          <div className="text-green-600 font-bold">{modelInfo.diseases || 12}/12</div>
+                          <div className="text-green-600 font-bold">{modelInfo.diseases || 13}/13</div>
                           <div className="text-green-800/60 text-xs">Models Loaded</div>
                         </div>
                         <div>

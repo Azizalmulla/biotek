@@ -1,6 +1,6 @@
 """
 Kaggle Dataset Loaders for BioTeK
-Loads real patient data from Kaggle datasets for all 12 diseases
+Loads real patient data from Kaggle datasets for all 13 diseases
 """
 
 import pandas as pd

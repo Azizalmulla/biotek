@@ -476,7 +476,7 @@ async def load_model():
     except Exception as e:
         print(f"  Metadata not loaded: {e}")
     
-    print(f"✓ Loaded {len(real_disease_models)}/12 real disease models")
+    print(f"✓ Loaded {len(real_disease_models)}/13 real disease models")
     
     # Load UNIFIED model (new architecture - single model for all diseases)
     global unified_disease_model  # Must declare global to persist
@@ -484,7 +484,7 @@ async def load_model():
     try:
         if unified_model_path.exists() and UnifiedDiseaseModel is not None:
             unified_disease_model = UnifiedDiseaseModel.load(str(unified_model_path))
-            print(f"✓ Unified model loaded: {len(unified_disease_model.models)}/12 diseases")
+            print(f"✓ Unified model loaded: {len(unified_disease_model.models)}/13 diseases")
         else:
             print(f"  ⚠ Unified model not found at {unified_model_path} or UnifiedDiseaseModel={UnifiedDiseaseModel}")
     except Exception as e:

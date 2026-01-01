@@ -24,7 +24,7 @@ const steps: Step[] = [
   {
     number: "02",
     title: "Multi-Disease Analysis",
-    description: "Run XGBoost+LightGBM ensemble predicting 12 diseases. Optional Evo 2 DNA or GLM-4 imaging analysis.",
+    description: "Run ML ensemble predicting 13 diseases. Optional Evo 2 DNA or GLM-4 imaging analysis.",
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
@@ -171,7 +171,7 @@ export default function WorkflowCards() {
         className="mt-16"
       >
         <div className="flex flex-wrap items-center justify-center gap-3">
-          {['Evo 2 DNA', 'GLM-4.5V Vision', '12 Disease Models', '83% Accuracy', 'AI Assistant'].map((badge) => (
+          {['Evo 2 DNA', 'GLM-4.5V Vision', '13 Disease Models', '83% Accuracy', 'AI Assistant'].map((badge) => (
             <div
               key={badge}
               className="bg-white px-4 py-2 rounded-full border border-black/5 shadow-sm text-xs font-medium text-black/60 hover:border-black/20 hover:text-black transition-all cursor-default"

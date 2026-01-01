@@ -1,5 +1,5 @@
 """
-Train ALL 12 disease models using ONLY common features available from patient input.
+Train ALL 13 disease models using ONLY common features available from patient input.
 
 This solves the feature mismatch problem - all models will use the same 9 features
 that we always have from the patient intake form.
@@ -253,7 +253,7 @@ def load_and_prepare_dataset(name, path, target_col):
 
 
 def train_all_unified_models():
-    """Train all 12 disease models using common features"""
+    """Train all 13 disease models using common features"""
     
     print("="*60)
     print("TRAINING ALL MODELS WITH COMMON FEATURES")
@@ -279,7 +279,7 @@ def train_all_unified_models():
     ]
     
     for name, path, target_col in datasets:
-        print(f"\n[{len(models)+1}/12] {name}")
+        print(f"\n[{len(models)+1}/13] {name}")
         
         if path and os.path.exists(path):
             df = load_and_prepare_dataset(name, path, target_col)

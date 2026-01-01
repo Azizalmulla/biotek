@@ -86,7 +86,7 @@ class UnifiedDiseaseModel:
     Unified Multi-Task Disease Risk Model
     
     Uses CatBoost as the foundation (excellent for clinical tabular data)
-    with multi-output capability for 12 diseases.
+    with multi-output capability for 13 diseases.
     """
     
     def __init__(self):
@@ -530,7 +530,7 @@ class UnifiedDiseaseModel:
         
         if verbose:
             print(f"\n{'='*60}")
-            print(f"TRAINING COMPLETE: {len(self.models)}/12 diseases")
+            print(f"TRAINING COMPLETE: {len(self.models)}/13 diseases")
             print(f"{'='*60}")
         
         return self

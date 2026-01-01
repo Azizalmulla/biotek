@@ -1,6 +1,6 @@
 """
 AutoGluon Training Script for BioTeK Disease Prediction
-Trains AutoGluon models on all 12 disease datasets
+Trains AutoGluon models on all 13 disease datasets
 """
 
 import os

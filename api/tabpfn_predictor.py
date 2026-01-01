@@ -272,7 +272,7 @@ class TabPFNPredictor:
         self, 
         patient_features: Dict[str, float]
     ) -> Dict[str, TabPFNPrediction]:
-        """Predict risk for all 12 diseases"""
+        """Predict risk for all 13 diseases"""
         predictions = {}
         
         for disease_id in DISEASE_CONFIGS.keys():

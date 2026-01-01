@@ -1,9 +1,9 @@
 """
 BioTeK Multi-Disease API
-FastAPI endpoints for 12-disease prediction with privacy-preserving features
+FastAPI endpoints for 13-disease prediction with privacy-preserving features
 
 Endpoints:
-- /predict/multi - Predict all 12 diseases
+- /predict/multi - Predict all 13 diseases
 - /predict/{disease_id} - Predict single disease
 - /genetics/prs - Calculate all PRS scores
 - /genetics/prs/{category} - Calculate category-specific PRS
@@ -163,7 +163,7 @@ class LLMReportRequest(BaseModel):
 
 app = FastAPI(
     title="BioTeK Multi-Disease API",
-    description="Privacy-preserving AI for 12-disease risk prediction",
+    description="Privacy-preserving AI for 13-disease risk prediction",
     version="2.0.0"
 )
 
@@ -213,7 +213,7 @@ async def predict_all_diseases(
     patient_id: Optional[str] = None
 ):
     """
-    Predict risk for all 12 diseases
+    Predict risk for all 13 diseases
     
     Returns risk scores, categories, and top contributing factors for each disease.
     """
@@ -639,7 +639,7 @@ def _generate_fallback_report(request: LLMReportRequest) -> str:
 **Patient Profile:** {features.get('age')} year old {'male' if features.get('sex') == 1 else 'female'}, BMI {features.get('bmi'):.1f}
 
 **Risk Summary:**
-This assessment evaluated risk across 12 chronic diseases using clinical biomarkers and genetic risk scores.
+This assessment evaluated risk across 13 chronic diseases using clinical biomarkers and genetic risk scores.
 
 """
     

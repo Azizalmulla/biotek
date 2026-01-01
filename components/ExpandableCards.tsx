@@ -28,10 +28,10 @@ const cards: Card[] = [
   {
     id: 2,
     title: 'Multi-Disease Risk Prediction',
-    description: 'XGBoost + LightGBM ensemble predicting 12 chronic diseases with clinical-grade accuracy',
+    description: 'ML ensemble predicting 13 chronic diseases with calibrated probabilities',
     features: [
-      '83% prediction accuracy with 0.890 AUC score',
-      '12 disease models: diabetes, heart disease, stroke, cancer & more',
+      '83% average AUC across all disease models',
+      '13 disease models: diabetes, heart disease, stroke, cancer & more',
       'AI Treatment Optimizer with evidence-based protocols',
       'Calibrated confidence intervals and risk trajectories'
     ],

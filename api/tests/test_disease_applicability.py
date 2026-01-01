@@ -117,7 +117,7 @@ class TestMetadataCompleteness:
     """Ensure all diseases have proper metadata"""
     
     def test_all_diseases_have_metadata(self):
-        """All 12 diseases should have metadata defined"""
+        """All 13 diseases should have metadata defined"""
         expected_diseases = [
             'type2_diabetes', 'coronary_heart_disease', 'hypertension',
             'stroke', 'chronic_kidney_disease', 'nafld', 'heart_failure',

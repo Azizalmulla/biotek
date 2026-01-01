@@ -288,7 +288,7 @@ export default function MultiDiseaseDashboard() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-black mb-2">Multi-Disease Risk Assessment</h1>
           <p className="text-black/60">
-            Comprehensive analysis of 12 chronic diseases using 55 clinical biomarkers and genetic risk scores
+            Comprehensive analysis of 13 chronic diseases using 55 clinical biomarkers and genetic risk scores
           </p>
         </div>
 
@@ -543,7 +543,7 @@ export default function MultiDiseaseDashboard() {
             </div>
           </div>
           <div className="text-xs text-black/40">
-            BioTeK v2.0 • 12 Diseases • 55 Features • 5 PRS Panels
+            BioTeK v3.0 • 13 Diseases • 55 Features • 5 PRS Panels
           </div>
         </motion.div>
       </div>

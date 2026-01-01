@@ -34,6 +34,7 @@ export default function Home() {
               <a href="#features" className="text-black/60 hover:text-black transition-colors">Features</a>
               <a href="#privacy" className="text-black/60 hover:text-black transition-colors">Privacy</a>
               <Link href="/docs" className="text-black/60 hover:text-black transition-colors">Technology</Link>
+              <Link href="/ethics" className="text-black/60 hover:text-black transition-colors">Ethics</Link>
             </div>
             
             <div className="flex items-center gap-3">
@@ -109,7 +110,7 @@ export default function Home() {
                 <div className="text-sm text-black/50">Model Accuracy</div>
               </div>
               <div className="space-y-1">
-                <div className="text-3xl font-bold text-black">12</div>
+                <div className="text-3xl font-bold text-black">13</div>
                 <div className="text-sm text-black/50">Disease Models</div>
               </div>
               <div className="space-y-1">
@@ -446,8 +447,11 @@ export default function Home() {
             <span className="text-black/30">·</span>
             <span className="text-sm text-black/50">AI for Ethical Genomics</span>
           </div>
-          <div className="text-sm text-black/50">
-            University Research Project · Not for Clinical Use
+          <div className="flex items-center gap-6 text-sm">
+            <Link href="/docs" className="text-black/50 hover:text-black transition-colors">Technology</Link>
+            <Link href="/ethics" className="text-black/50 hover:text-black transition-colors">Ethics & AI Governance</Link>
+            <span className="text-black/30">·</span>
+            <span className="text-black/50">University Research Project</span>
           </div>
         </div>
       </footer>
@@ -469,7 +473,7 @@ const features = [
   {
     icon: '🎯',
     title: 'Multi-Disease Risk Prediction',
-    description: 'XGBoost+LightGBM ensemble predicting 12 chronic diseases with 83% accuracy and calibrated confidence intervals.',
+    description: 'CatBoost ensemble predicting 13 chronic diseases with calibrated probabilities and sex-specific applicability gates.',
   },
   {
     icon: '🤖',

@@ -45,7 +45,7 @@ export default function DocsPage() {
             <div>
               <h3 className="font-bold text-black mb-4">AI Models</h3>
               <ul className="space-y-2 text-sm text-black/60">
-                <li><a href="#risk-model" className="hover:text-black transition-colors">Risk Prediction (XGBoost+LightGBM)</a></li>
+                <li><a href="#risk-model" className="hover:text-black transition-colors">Risk Prediction (Ensemble)</a></li>
                 <li><a href="#evo2" className="hover:text-black transition-colors">Evo 2 DNA Model</a></li>
                 <li><a href="#glm" className="hover:text-black transition-colors">GLM-4.5V Vision</a></li>
                 <li><a href="#clinical-llm" className="hover:text-black transition-colors">AI Research Assistant</a></li>
@@ -69,13 +69,13 @@ export default function DocsPage() {
             <h1 className="text-4xl md:text-5xl font-bold text-black mb-6">Technical Documentation</h1>
             <p className="text-xl text-black/60 leading-relaxed max-w-3xl">
               Comprehensive guide to the BioTeK privacy-preserving multi-disease AI platform. 
-              Featuring 12 disease predictions, 55 clinical biomarkers, 5 genetic risk panels, Evo 2 DNA analysis, and GLM-4.5V medical vision.
+              Featuring 13 disease predictions, 55 clinical biomarkers, 5 genetic risk panels, Evo 2 DNA analysis, and GLM-4.5V medical vision.
             </p>
             
             {/* Quick Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
               <div className="bg-white rounded-2xl p-4 border border-black/5">
-                <div className="text-2xl font-bold text-black">12</div>
+                <div className="text-2xl font-bold text-black">13</div>
                 <div className="text-xs text-black/50">Diseases</div>
               </div>
               <div className="bg-white rounded-2xl p-4 border border-black/5">
@@ -194,8 +194,8 @@ data_shared: NONE (only model weights)`}
             </h2>
             <div className="bg-white rounded-3xl p-8 border border-black/5 shadow-sm space-y-6">
               <p className="text-black/70 leading-relaxed">
-                BioTeK uses 12 disease-specific XGBoost + LightGBM ensemble models (v2.0.0), each trained on real medical datasets 
-                from UCI, Kaggle, and clinical repositories. Average accuracy across all models is 83% with AUC of 0.890.
+                BioTeK uses 13 disease-specific CatBoost models (v3.0.0), each trained on real medical datasets 
+                from UCI, Kaggle, and clinical repositories. Average AUC across all models is 83% with isotonic calibration.
               </p>
               
               <div className="grid md:grid-cols-2 gap-8">
@@ -206,7 +206,7 @@ data_shared: NONE (only model weights)`}
                       'Type 2 Diabetes', 'Coronary Heart Disease', 'Hypertension', 
                       'Chronic Kidney Disease', 'Fatty Liver (NAFLD)', 'Stroke',
                       'Heart Failure', 'Atrial Fibrillation', 'COPD',
-                      'Breast Cancer', 'Colorectal Cancer', "Alzheimer's"
+                      'Breast Cancer', 'Colorectal Cancer', "Alzheimer's", 'Prostate Cancer'
                     ].map((d) => (
                       <div key={d} className="flex items-center gap-2 text-black/70">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500"/>
@@ -241,19 +241,19 @@ data_shared: NONE (only model weights)`}
               </div>
 
               <div className="bg-black/[0.03] p-6 rounded-2xl">
-                <h4 className="font-bold text-black mb-3">Ensemble Architecture (v2.0.0)</h4>
+                <h4 className="font-bold text-black mb-3">Model Architecture (v3.0.0)</h4>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div className="text-center">
-                    <div className="font-mono text-black">XGBoost</div>
-                    <div className="text-black/50">50% weight • 200 trees</div>
+                    <div className="font-mono text-black">CatBoost</div>
+                    <div className="text-black/50">Primary • 300 iter • calibrated</div>
                   </div>
                   <div className="text-center">
-                    <div className="font-mono text-black">LightGBM</div>
-                    <div className="text-black/50">50% weight • 200 trees</div>
+                    <div className="font-mono text-black">XGBoost + LightGBM</div>
+                    <div className="text-black/50">Fallback • 200 trees each</div>
                   </div>
                 </div>
                 <div className="mt-4 pt-4 border-t border-black/10 text-xs text-black/50">
-                  Trained on real medical datasets: UCI Heart Disease, Pima Diabetes, Framingham, CKD dataset, and more.
+                  Trained on real medical datasets: UCI Heart Disease, OASIS Alzheimer's, Kaggle COPD, Wisconsin Breast Cancer, and more.
                 </div>
               </div>
             </div>
@@ -421,7 +421,7 @@ data_shared: NONE (only model weights)`}
             <div className="bg-white rounded-3xl p-8 border border-black/5 shadow-sm space-y-6">
               <p className="text-black/70 leading-relaxed">
                 We use <strong>SHAP (SHapley Additive exPlanations)</strong> to provide transparent, interpretable explanations for each prediction. 
-                SHAP values are computed using a TreeExplainer optimized for our XGBoost+LightGBM ensemble.
+                SHAP values are computed using a TreeExplainer optimized for our CatBoost models.
               </p>
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="bg-black/[0.03] p-6 rounded-2xl">
@@ -523,7 +523,7 @@ data_shared: NONE (only model weights)`}
 
           {/* Footer */}
           <div className="pt-12 border-t border-black/10 text-center text-black/40 text-sm">
-            BioTeK Documentation · Model v2.0.0 · XGBoost+LightGBM Ensemble · Updated Dec 2025
+            BioTeK Documentation · Model v3.0.0 · CatBoost + XGBoost/LightGBM Ensemble · Updated Jan 2026
           </div>
         </div>
       </div>

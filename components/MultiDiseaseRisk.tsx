@@ -904,7 +904,7 @@ export default function MultiDiseaseRisk({
             </div>
             <div>
               <h2 className="text-2xl font-bold text-black">Multi-Disease Risk Assessment</h2>
-              <p className="text-sm text-black/60">12 chronic diseases • AI-powered • Privacy-preserving</p>
+              <p className="text-sm text-black/60">13 chronic diseases • AI-powered • Privacy-preserving</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -1174,7 +1174,7 @@ export default function MultiDiseaseRisk({
           {isAnalyzing ? (
             <>
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Analyzing 12 Disease Models...
+              Analyzing 13 Disease Models...
             </>
           ) : (
             <>

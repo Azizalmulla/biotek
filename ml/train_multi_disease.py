@@ -1,6 +1,6 @@
 """
 BioTeK Multi-Disease Model Training Pipeline
-Trains 12 disease-specific models using advanced ensemble architecture
+Trains 13 disease-specific models using advanced ensemble architecture
 
 Models: XGBoost + LightGBM + CatBoost ensemble (upgraded from RandomForest)
 Explainability: SHAP TreeExplainer per disease
@@ -384,7 +384,7 @@ class DiseaseModel:
 
 
 class MultiDiseasePredictor:
-    """Manages all 12 disease models"""
+    """Manages all 13 disease models"""
     
     def __init__(self):
         self.models: Dict[str, DiseaseModel] = {}

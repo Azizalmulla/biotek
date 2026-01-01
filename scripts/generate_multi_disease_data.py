@@ -1,6 +1,6 @@
 """
 BioTeK Multi-Disease Synthetic Data Generator
-Generates realistic clinical + genetic data for 12 disease risk predictions
+Generates realistic clinical + genetic data for 13 disease risk predictions
 Based on UK Biobank validated biomarkers and GWAS literature
 
 Features: 55 clinical biomarkers
@@ -120,7 +120,7 @@ FEATURE_SCHEMA = {
 }
 
 # =============================================================================
-# DISEASE DEFINITIONS (12 Diseases)
+# DISEASE DEFINITIONS (13 Diseases)
 # =============================================================================
 
 DISEASES = {

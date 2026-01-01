@@ -409,7 +409,7 @@ CDS_HOOKS_DISCOVERY = {
         {
             "hook": "patient-view",
             "title": "BioTeK Multi-Disease Risk Assessment",
-            "description": "Provides 12-disease risk prediction when viewing a patient",
+            "description": "Provides 13-disease risk prediction when viewing a patient",
             "id": "biotek-risk-assessment",
             "prefetch": {
                 "patient": "Patient/{{context.patientId}}",

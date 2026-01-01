@@ -1,5 +1,5 @@
 """
-BioTeK Real Model Training - ALL 12 DISEASES
+BioTeK Real Model Training - ALL 13 DISEASES
 Trains XGBoost + LightGBM on REAL public medical datasets
 
 Datasets:
@@ -698,17 +698,17 @@ from ml.disease_model import RealDiseaseModel
 # =============================================================================
 
 def train_all_models():
-    """Train models on ALL 12 diseases using real datasets"""
+    """Train models on ALL 13 diseases using real datasets"""
     
     print("\n" + "="*60)
-    print("BioTeK Real Model Training Pipeline - ALL 12 DISEASES")
+    print("BioTeK Real Model Training Pipeline - ALL 13 DISEASES")
     print("XGBoost + LightGBM on Real Medical Data")
     print("="*60)
     
     models = {}
     
     # 1. Type 2 Diabetes (REAL DATA - 101K hospital patients or Pima)
-    print("\n[1/12] Loading Diabetes Dataset...")
+    print("\n[1/13] Loading Diabetes Dataset...")
     pima = load_pima_diabetes()
     if pima is not None:
         # Handle different column names from different sources
@@ -720,7 +720,7 @@ def train_all_models():
         models['type2_diabetes'] = diabetes_model
     
     # 2. Coronary Heart Disease (UCI - REAL DATA)
-    print("\n[2/12] Loading UCI Heart Disease...")
+    print("\n[2/13] Loading UCI Heart Disease...")
     uci_heart = load_heart_disease_uci()
     if uci_heart is not None:
         X = uci_heart.drop('target', axis=1)
@@ -730,7 +730,7 @@ def train_all_models():
         models['coronary_heart_disease'] = uci_model
     
     # 3. Stroke (Kaggle - attempts REAL DATA)
-    print("\n[3/12] Loading Stroke Dataset...")
+    print("\n[3/13] Loading Stroke Dataset...")
     stroke = load_stroke_data()
     if stroke is not None:
         X = stroke.drop('stroke', axis=1)
@@ -740,7 +740,7 @@ def train_all_models():
         models['stroke'] = stroke_model
     
     # 4. Chronic Kidney Disease (REAL UCI DATA)
-    print("\n[4/12] Loading CKD Dataset...")
+    print("\n[4/13] Loading CKD Dataset...")
     ckd = load_chronic_kidney()
     if ckd is not None:
         # Use all available numeric columns (real UCI data has wbcc/rbcc not wc/rc)
@@ -753,7 +753,7 @@ def train_all_models():
         models['chronic_kidney_disease'] = ckd_model
     
     # 5. Liver Disease / NAFLD
-    print("\n[5/12] Loading Liver Disease Dataset...")
+    print("\n[5/13] Loading Liver Disease Dataset...")
     liver = load_liver_disease()
     if liver is not None:
         X = liver.drop('target', axis=1)
@@ -763,7 +763,7 @@ def train_all_models():
         models['nafld'] = liver_model
     
     # 6. Breast Cancer (sklearn - REAL DATA)
-    print("\n[6/12] Loading Breast Cancer Dataset...")
+    print("\n[6/13] Loading Breast Cancer Dataset...")
     breast = load_breast_cancer()
     if breast is not None:
         X = breast.drop('target', axis=1)
@@ -773,7 +773,7 @@ def train_all_models():
         models['breast_cancer'] = breast_model
     
     # 7. Hypertension (derived from Framingham)
-    print("\n[7/12] Loading Hypertension Dataset...")
+    print("\n[7/13] Loading Hypertension Dataset...")
     hyp = load_hypertension()
     if hyp is not None:
         # Handle different column names from different data sources
@@ -793,7 +793,7 @@ def train_all_models():
         models['hypertension'] = hyp_model
     
     # 8. Heart Failure (UCI - attempts REAL DATA)
-    print("\n[8/12] Loading Heart Failure Dataset...")
+    print("\n[8/13] Loading Heart Failure Dataset...")
     hf = load_heart_failure()
     if hf is not None:
         X = hf.drop('target', axis=1)
@@ -803,7 +803,7 @@ def train_all_models():
         models['heart_failure'] = hf_model
     
     # 9. COPD
-    print("\n[9/12] Loading COPD Dataset...")
+    print("\n[9/13] Loading COPD Dataset...")
     copd = load_copd()
     if copd is not None:
         X = copd.drop('copd', axis=1)
@@ -813,7 +813,7 @@ def train_all_models():
         models['copd'] = copd_model
     
     # 10. Alzheimer's Disease
-    print("\n[10/12] Loading Alzheimer's Dataset...")
+    print("\n[10/13] Loading Alzheimer's Dataset...")
     alz = load_alzheimers()
     if alz is not None:
         X = alz.drop('alzheimers', axis=1)
@@ -823,7 +823,7 @@ def train_all_models():
         models['alzheimers_disease'] = alz_model
     
     # 11. Atrial Fibrillation
-    print("\n[11/12] Loading Atrial Fibrillation Dataset...")
+    print("\n[11/13] Loading Atrial Fibrillation Dataset...")
     afib = load_atrial_fibrillation()
     if afib is not None:
         X = afib.drop('afib', axis=1)
@@ -833,7 +833,7 @@ def train_all_models():
         models['atrial_fibrillation'] = afib_model
     
     # 12. Colorectal Cancer - Using UCI Primary Tumor Dataset (REAL DATA)
-    print("\n[12/12] Loading Colorectal Cancer Dataset...")
+    print("\n[12/13] Loading Colorectal Cancer Dataset...")
     try:
         from ucimlrepo import fetch_ucirepo
         primary_tumor = fetch_ucirepo(id=83)

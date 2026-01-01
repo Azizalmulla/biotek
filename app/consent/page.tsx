@@ -19,7 +19,7 @@ export default function ConsentPage() {
   };
 
   const handleNext = () => {
-    if (step < 4) setStep(step + 1);
+    if (step < 5) setStep(step + 1);
   };
 
   const handleBack = () => {
@@ -89,9 +89,12 @@ www.biotek.ai
     }
   };
 
+  const [aiLimitationsAcknowledged, setAiLimitationsAcknowledged] = useState(false);
+
   const canProceed = () => {
-    if (step === 1) return consents.clinical;
-    if (step === 3) return consents.audit;
+    if (step === 1) return aiLimitationsAcknowledged;
+    if (step === 2) return consents.clinical;
+    if (step === 4) return consents.audit;
     return true;
   };
 
@@ -154,8 +157,99 @@ www.biotek.ai
             </motion.div>
           )}
 
-          {/* Step 1: Clinical Data */}
+          {/* Step 1: AI Limitations Disclosure */}
           {step === 1 && (
+            <motion.div
+              key="step1-ai"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-white/80 backdrop-blur-md rounded-3xl p-12 space-y-8"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <span className="text-sm text-black/50">Step 1 of 4</span>
+                <div className="flex gap-2">
+                  <div className="w-2 h-2 rounded-full bg-black"></div>
+                  <div className="w-2 h-2 rounded-full bg-black/20"></div>
+                  <div className="w-2 h-2 rounded-full bg-black/20"></div>
+                  <div className="w-2 h-2 rounded-full bg-black/20"></div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <h2 className="text-3xl font-bold text-black">AI Limitations</h2>
+                <p className="text-black/60">Important information about our AI predictions</p>
+                
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 space-y-4">
+                  <div className="flex items-center gap-2 text-amber-800 font-medium">
+                    <span className="text-xl">⚠️</span>
+                    <span>Please understand these limitations:</span>
+                  </div>
+                  <ul className="space-y-3 text-amber-900">
+                    <li className="flex items-start gap-2">
+                      <span className="text-amber-500 mt-1">•</span>
+                      <span><strong>Not a diagnosis:</strong> AI predictions are risk estimates, not medical diagnoses. Always consult a healthcare provider.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-amber-500 mt-1">•</span>
+                      <span><strong>Accuracy varies:</strong> Model performance differs across demographics. Average accuracy is ~83%.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-amber-500 mt-1">•</span>
+                      <span><strong>Genetic limitations:</strong> PRS scores validated primarily on European ancestry populations.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-amber-500 mt-1">•</span>
+                      <span><strong>Data dependent:</strong> Predictions rely on accurate input data and may miss factors not collected.</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                  <a href="/ethics" target="_blank" className="flex items-center gap-2 text-blue-700 hover:text-blue-900 transition-colors">
+                    <span>📋</span>
+                    <span className="font-medium">View full AI Ethics & Model Cards documentation →</span>
+                  </a>
+                </div>
+
+                <label className="flex items-start gap-3 p-4 rounded-xl bg-black/5 cursor-pointer hover:bg-black/10 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={aiLimitationsAcknowledged}
+                    onChange={() => setAiLimitationsAcknowledged(!aiLimitationsAcknowledged)}
+                    className="mt-1 w-5 h-5 rounded border-2 border-black/20"
+                  />
+                  <div>
+                    <div className="font-medium text-black">I understand these AI limitations</div>
+                    <div className="text-sm text-black/50">(Required to continue)</div>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={handleBack}
+                  className="flex-1 bg-white/80 text-black py-4 rounded-2xl font-medium hover:bg-white transition-all"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={handleNext}
+                  disabled={!canProceed()}
+                  className={`flex-1 py-4 rounded-2xl font-medium transition-all ${
+                    canProceed()
+                      ? 'bg-black text-white hover:bg-black/80'
+                      : 'bg-black/20 text-black/40 cursor-not-allowed'
+                  }`}
+                >
+                  Continue →
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Step 2: Clinical Data */}
+          {step === 2 && (
             <motion.div
               key="step1"
               initial={{ opacity: 0, y: 20 }}
@@ -164,8 +258,9 @@ www.biotek.ai
               className="bg-white/80 backdrop-blur-md rounded-3xl p-12 space-y-8"
             >
               <div className="flex items-center justify-between mb-6">
-                <span className="text-sm text-black/50">Step 1 of 3</span>
+                <span className="text-sm text-black/50">Step 2 of 4</span>
                 <div className="flex gap-2">
+                  <div className="w-2 h-2 rounded-full bg-black"></div>
                   <div className="w-2 h-2 rounded-full bg-black"></div>
                   <div className="w-2 h-2 rounded-full bg-black/20"></div>
                   <div className="w-2 h-2 rounded-full bg-black/20"></div>
@@ -225,8 +320,8 @@ www.biotek.ai
             </motion.div>
           )}
 
-          {/* Step 2: Genetic Data */}
-          {step === 2 && (
+          {/* Step 3: Genetic Data */}
+          {step === 3 && (
             <motion.div
               key="step2"
               initial={{ opacity: 0, y: 20 }}
@@ -235,8 +330,9 @@ www.biotek.ai
               className="bg-white/80 backdrop-blur-md rounded-3xl p-12 space-y-8"
             >
               <div className="flex items-center justify-between mb-6">
-                <span className="text-sm text-black/50">Step 2 of 3</span>
+                <span className="text-sm text-black/50">Step 3 of 4</span>
                 <div className="flex gap-2">
+                  <div className="w-2 h-2 rounded-full bg-black"></div>
                   <div className="w-2 h-2 rounded-full bg-black"></div>
                   <div className="w-2 h-2 rounded-full bg-black"></div>
                   <div className="w-2 h-2 rounded-full bg-black/20"></div>
@@ -252,11 +348,11 @@ www.biotek.ai
                   <p className="text-black/70">Including genetic data improves accuracy:</p>
                   <div className="grid grid-cols-2 gap-4 mt-4">
                     <div className="bg-white/50 rounded-xl p-4">
-                      <div className="text-2xl font-bold text-black">~92%</div>
+                      <div className="text-2xl font-bold text-black">~83%</div>
                       <div className="text-sm text-black/50">Without genetics</div>
                     </div>
                     <div className="bg-white/50 rounded-xl p-4">
-                      <div className="text-2xl font-bold text-black">~95%</div>
+                      <div className="text-2xl font-bold text-black">~88%</div>
                       <div className="text-sm text-black/50">With genetics</div>
                     </div>
                   </div>
@@ -302,8 +398,8 @@ www.biotek.ai
             </motion.div>
           )}
 
-          {/* Step 3: Audit & Rights */}
-          {step === 3 && (
+          {/* Step 4: Audit & Rights */}
+          {step === 4 && (
             <motion.div
               key="step3"
               initial={{ opacity: 0, y: 20 }}
@@ -312,8 +408,9 @@ www.biotek.ai
               className="bg-white/80 backdrop-blur-md rounded-3xl p-12 space-y-8"
             >
               <div className="flex items-center justify-between mb-6">
-                <span className="text-sm text-black/50">Step 3 of 3</span>
+                <span className="text-sm text-black/50">Step 4 of 4</span>
                 <div className="flex gap-2">
+                  <div className="w-2 h-2 rounded-full bg-black"></div>
                   <div className="w-2 h-2 rounded-full bg-black"></div>
                   <div className="w-2 h-2 rounded-full bg-black"></div>
                   <div className="w-2 h-2 rounded-full bg-black"></div>
@@ -379,8 +476,8 @@ www.biotek.ai
             </motion.div>
           )}
 
-          {/* Step 4: Confirmation */}
-          {step === 4 && (
+          {/* Step 5: Confirmation */}
+          {step === 5 && (
             <motion.div
               key="step4"
               initial={{ opacity: 0, y: 20 }}

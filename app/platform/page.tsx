@@ -1157,7 +1157,7 @@ export default function PlatformPage() {
                       <span className="text-4xl">🧠</span>
                       <div>
                         <h2 className="text-2xl font-bold text-black">AI Clinical Intelligence</h2>
-                        <p className="text-sm text-black/60">12-Disease Risk Analysis • XGBoost+LightGBM Models • 83% Average Accuracy</p>
+                        <p className="text-sm text-black/60">13-Disease Risk Analysis • ML Ensemble • 83% Average AUC</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-4 mt-6">
@@ -1184,14 +1184,14 @@ export default function PlatformPage() {
                       <span className="text-3xl">⚠️</span>
                       <div>
                         <h3 className="text-xl font-bold text-black">Top Risk Conditions</h3>
-                        <p className="text-sm text-black/60">Highest priority conditions from 12-disease analysis</p>
+                        <p className="text-sm text-black/60">Highest priority conditions from 13-disease analysis</p>
                       </div>
                     </div>
                     
                     {loadingMultiDisease ? (
                       <div className="text-center py-8">
                         <div className="animate-spin text-4xl mb-2">⏳</div>
-                        <p className="text-black/60">Analyzing 12 disease models...</p>
+                        <p className="text-black/60">Analyzing 13 disease models...</p>
                       </div>
                     ) : multiDiseaseData?.predictions ? (
                       <div className="space-y-4">
