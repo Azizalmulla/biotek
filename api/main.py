@@ -1996,7 +1996,7 @@ async def login_staff(request: StaffLoginRequest):
             email = demo['email']
             full_name = demo['full_name']
             
-            # Sync to RBAC
+            # Sync to RBAC (non-blocking)
             try:
                 from authorization import auth_engine, StaffUser, Role as AuthRole
                 existing = auth_engine.get_user(request.user_id)
@@ -2009,21 +2009,33 @@ async def login_staff(request: StaffLoginRequest):
                     )
                     auth_engine.create_user(staff_user, request.user_id)
             except Exception as sync_err:
-                print(f"RBAC sync warning: {sync_err}")
+                print(f"RBAC sync warning (non-fatal): {sync_err}")
             
-            # Create session
-            session = create_session(request.user_id, role)
+            # Create session - use in-memory fallback if DB fails
+            try:
+                session = create_session(request.user_id, role)
+                session_id = session["session_id"]
+                expires_at = session["expires_at"]
+            except Exception as sess_err:
+                print(f"Session DB warning, using in-memory: {sess_err}")
+                session_id = f"DEMO-{uuid.uuid4().hex[:16].upper()}"
+                expires_at = (datetime.now() + timedelta(hours=8)).isoformat()
+            
             access_token = create_access_token({"sub": request.user_id, "role": role, "email": email})
             role_enum = Role(role)
             allowed_purposes = list(get_allowed_purposes(role_enum))
             
-            log_access_attempt(user_id=request.user_id, role=role, purpose="login",
-                             data_type="authentication", granted=True, reason="Demo login")
+            # Log access (non-blocking)
+            try:
+                log_access_attempt(user_id=request.user_id, role=role, purpose="login",
+                                 data_type="authentication", granted=True, reason="Demo login")
+            except Exception as log_err:
+                print(f"Access log warning (non-fatal): {log_err}")
             
             return StaffLoginResponse(
-                session_id=session["session_id"], user_id=request.user_id, email=email,
+                session_id=session_id, user_id=request.user_id, email=email,
                 role=role_enum, full_name=full_name, access_token=access_token,
-                expires_at=session["expires_at"], allowed_purposes=allowed_purposes
+                expires_at=expires_at, allowed_purposes=allowed_purposes
             )
         
         # Get staff account using PostgreSQL-compatible query
