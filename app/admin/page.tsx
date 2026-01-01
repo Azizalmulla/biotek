@@ -5,17 +5,21 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 
-const API_BASE = 'https://biotek-production.up.railway.app';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://biotek-api.onrender.com';
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'staff' | 'create' | 'audit' | 'reports' | 'models' | 'federated'>('staff');
+  const [activeTab, setActiveTab] = useState<'staff' | 'create' | 'audit' | 'breakglass' | 'reports' | 'models' | 'federated'>('staff');
   const [loading, setLoading] = useState(true);
   
   // Staff management
   const [staffAccounts, setStaffAccounts] = useState<any[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
+  
+  // Break-glass events
+  const [breakGlassEvents, setBreakGlassEvents] = useState<any[]>([]);
+  const [loadingBreakGlass, setLoadingBreakGlass] = useState(false);
   
   // Federated learning
   const [federatedTraining, setFederatedTraining] = useState(false);
@@ -94,6 +98,26 @@ export default function AdminDashboard() {
       setAccessLogs(data.access_logs || []);
     } catch (error) {
       console.error('Failed to load audit logs:', error);
+    }
+  };
+
+  const loadBreakGlassEvents = async () => {
+    setLoadingBreakGlass(true);
+    try {
+      const response = await fetch(`${API_BASE}/auth/audit/break-glass?limit=100`, {
+        headers: {
+          'X-User-Role': 'admin',
+          'X-User-ID': session?.adminId || 'admin_001'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setBreakGlassEvents(data.break_glass_events || []);
+      }
+    } catch (error) {
+      console.error('Failed to load break-glass events:', error);
+    } finally {
+      setLoadingBreakGlass(false);
     }
   };
 
@@ -279,6 +303,7 @@ export default function AdminDashboard() {
               { id: 'staff', label: 'Staff Accounts', icon: '👥' },
               { id: 'create', label: 'Create Account', icon: '➕' },
               { id: 'audit', label: 'Audit Logs', icon: '📋' },
+              { id: 'breakglass', label: 'Break-Glass', icon: '🚨' },
               { id: 'reports', label: 'Reports', icon: '📊' },
               { id: 'models', label: 'ML Models', icon: '🧠' },
               { id: 'federated', label: 'Federated Training', icon: '🔗' },
@@ -600,6 +625,87 @@ export default function AdminDashboard() {
                   <div className="text-center py-12">
                     <div className="text-5xl mb-4">📋</div>
                     <p className="text-black/60">No audit logs yet</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Break-Glass Review Tab */}
+          {activeTab === 'breakglass' && (
+            <motion.div
+              key="breakglass"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              onAnimationStart={() => loadBreakGlassEvents()}
+            >
+              <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8 border-2 border-red-200">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-3xl">🚨</span>
+                  <h2 className="text-2xl font-bold text-red-700">Break-Glass Events</h2>
+                </div>
+                <p className="text-sm text-red-600/80 mb-6">
+                  Emergency access overrides that bypassed normal authorization. Review for appropriateness.
+                </p>
+
+                {loadingBreakGlass ? (
+                  <div className="text-center py-12">
+                    <div className="text-4xl mb-4 animate-pulse">🔍</div>
+                    <p className="text-black/60">Loading break-glass events...</p>
+                  </div>
+                ) : breakGlassEvents.length > 0 ? (
+                  <div className="space-y-4">
+                    {breakGlassEvents.map((event, idx) => (
+                      <div key={event.id || idx} className="bg-red-50 border border-red-200 rounded-xl p-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-mono text-sm bg-red-100 px-2 py-1 rounded">
+                                {event.actor_user_id || event.user_id}
+                              </span>
+                              <span className="text-sm text-red-700 capitalize">
+                                ({event.actor_role || event.user_role})
+                              </span>
+                            </div>
+                            <div className="text-sm text-black/70 mb-1">
+                              <strong>Patient:</strong> {event.patient_id || 'Unknown'}
+                            </div>
+                            <div className="text-sm text-black/70 mb-1">
+                              <strong>Action:</strong> {event.action || 'break_glass'}
+                            </div>
+                            {event.reason && (
+                              <div className="text-sm text-black/70 mb-1">
+                                <strong>Reason:</strong> {event.reason}
+                              </div>
+                            )}
+                            {event.encounter_id && (
+                              <div className="text-xs text-black/50">
+                                Encounter: {event.encounter_id}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-black/50">
+                              {new Date(event.timestamp).toLocaleString()}
+                            </div>
+                            <div className="mt-2">
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                ⚠️ Break-Glass
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="text-5xl mb-4">✅</div>
+                    <p className="text-green-700 font-medium">No break-glass events</p>
+                    <p className="text-sm text-black/50 mt-2">
+                      No emergency access overrides have been used
+                    </p>
                   </div>
                 )}
               </div>

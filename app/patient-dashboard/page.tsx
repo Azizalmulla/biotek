@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 
-const API_BASE = 'https://biotek-production.up.railway.app';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://biotek-api.onrender.com';
 
 export default function PatientDashboard() {
   const router = useRouter();
@@ -77,18 +77,31 @@ export default function PatientDashboard() {
       setMyPredictions([]);
     }
 
-    // Load who accessed my data (audit log is correct for this)
+    // Load who accessed my data - use new RBAC audit trail endpoint
     try {
-      const response = await fetch(`${API_BASE}/audit/access-log?limit=50`);
+      const response = await fetch(`${API_BASE}/auth/audit/patient/${patientId}?limit=50`, {
+        headers: {
+          'X-User-ID': patientId,
+          'X-User-Role': 'patient'
+        }
+      });
       const data = await response.json();
       
-      // Filter to accesses related to this patient
-      const myAccess = data.access_logs?.filter((log: any) => 
-        log.patient_id && log.patient_id.includes(patientId)
-      ) || [];
-      setAccessLog(myAccess);
+      // Real audit trail from RBAC system
+      setAccessLog(data.audit_trail || []);
     } catch (error) {
       console.error('Failed to load access log:', error);
+      // Fallback to old endpoint if new one fails
+      try {
+        const fallbackResponse = await fetch(`${API_BASE}/audit/access-log?limit=50`);
+        const fallbackData = await fallbackResponse.json();
+        const myAccess = fallbackData.access_logs?.filter((log: any) => 
+          log.patient_id && log.patient_id.includes(patientId)
+        ) || [];
+        setAccessLog(myAccess);
+      } catch {
+        setAccessLog([]);
+      }
     }
 
     // Load my clinical data
@@ -677,26 +690,42 @@ export default function PatientDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {accessLog.map((log) => (
-                        <tr key={log.id} className="border-b border-black/5 hover:bg-black/5">
-                          <td className="py-3 px-4 text-sm text-black/70">
-                            {new Date(log.timestamp).toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4 text-sm font-mono text-black">{log.user_id}</td>
-                          <td className="py-3 px-4 text-sm capitalize text-black/70">{log.user_role}</td>
-                          <td className="py-3 px-4 text-sm capitalize text-black/70">{log.purpose}</td>
-                          <td className="py-3 px-4 text-sm text-black/70">{log.data_type}</td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              log.granted
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                            }`}>
-                              {log.granted ? 'Granted' : 'Denied'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                      {accessLog.map((log, idx) => {
+                        // Handle both old and new audit format
+                        const userId = log.actor_user_id || log.user_id || 'Unknown';
+                        const userRole = log.actor_role || log.user_role || 'unknown';
+                        const isGranted = log.status === 'granted' || log.granted === true;
+                        const isBreakGlass = log.break_glass === 1 || log.break_glass === true;
+                        
+                        return (
+                          <tr key={log.id || idx} className={`border-b border-black/5 hover:bg-black/5 ${isBreakGlass ? 'bg-red-50' : ''}`}>
+                            <td className="py-3 px-4 text-sm text-black/70">
+                              {new Date(log.timestamp).toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4 text-sm font-mono text-black">
+                              {userId}
+                              {isBreakGlass && <span className="ml-2 text-red-600">🚨</span>}
+                            </td>
+                            <td className="py-3 px-4 text-sm capitalize text-black/70">{userRole}</td>
+                            <td className="py-3 px-4 text-sm capitalize text-black/70">{log.purpose || log.action || '-'}</td>
+                            <td className="py-3 px-4 text-sm text-black/70">{log.data_type || log.action || '-'}</td>
+                            <td className="py-3 px-4">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                isGranted
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}>
+                                {isGranted ? 'Granted' : 'Denied'}
+                              </span>
+                              {isBreakGlass && (
+                                <span className="ml-2 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                  Break-Glass
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
