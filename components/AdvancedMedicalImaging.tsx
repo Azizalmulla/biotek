@@ -68,32 +68,146 @@ export default function AdvancedMedicalImaging({ patientId, encounterId, userId,
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [isExtractingFrames, setIsExtractingFrames] = useState(false);
+  const [extractedFrameCount, setExtractedFrameCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
-    
-    // Limit files based on mode
-    const maxFiles = mode === 'compare' ? 4 : mode === 'video' ? 8 : 1;
-    const filesToUse = selectedFiles.slice(0, maxFiles);
-    
-    setFiles(filesToUse);
-    
-    // Generate previews
-    const newPreviews: string[] = [];
-    filesToUse.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        newPreviews.push(e.target?.result as string);
-        if (newPreviews.length === filesToUse.length) {
-          setPreviews([...newPreviews]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    if (selectedFiles.length === 0) return;
     
     setResult(null);
     setError(null);
+    
+    // Check if it's a video file in video mode
+    const firstFile = selectedFiles[0];
+    const isVideo = firstFile.type.startsWith('video/');
+    
+    if (mode === 'video' && isVideo) {
+      // Handle video file - extract frames
+      setVideoFile(firstFile);
+      setIsExtractingFrames(true);
+      setExtractedFrameCount(0);
+      
+      try {
+        const frames = await extractFramesFromVideo(firstFile, 8);
+        setFiles(frames);
+        
+        // Generate previews for extracted frames
+        const newPreviews: string[] = [];
+        for (const frame of frames) {
+          const dataUrl = await fileToDataUrl(frame);
+          newPreviews.push(dataUrl);
+        }
+        setPreviews(newPreviews);
+        setExtractedFrameCount(frames.length);
+      } catch (err) {
+        setError('Failed to extract frames from video. Try uploading individual frame images instead.');
+        setVideoFile(null);
+      } finally {
+        setIsExtractingFrames(false);
+      }
+    } else {
+      // Handle image files
+      setVideoFile(null);
+      const maxFiles = mode === 'compare' ? 4 : mode === 'video' ? 8 : 1;
+      const filesToUse = selectedFiles.slice(0, maxFiles);
+      
+      setFiles(filesToUse);
+      
+      // Generate previews
+      const newPreviews: string[] = [];
+      filesToUse.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          newPreviews.push(e.target?.result as string);
+          if (newPreviews.length === filesToUse.length) {
+            setPreviews([...newPreviews]);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  // Helper to convert File to data URL
+  const fileToDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Extract frames from video file
+  const extractFramesFromVideo = (videoFile: File, numFrames: number): Promise<File[]> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        reject(new Error('Canvas not supported'));
+        return;
+      }
+      
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      
+      const frames: File[] = [];
+      let currentFrame = 0;
+      
+      video.onloadedmetadata = () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        const duration = video.duration;
+        const interval = duration / (numFrames + 1);
+        
+        const captureFrame = async () => {
+          if (currentFrame >= numFrames) {
+            resolve(frames);
+            URL.revokeObjectURL(video.src);
+            return;
+          }
+          
+          const seekTime = interval * (currentFrame + 1);
+          video.currentTime = seekTime;
+        };
+        
+        video.onseeked = () => {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const frameFile = new File(
+                [blob], 
+                `frame_${currentFrame + 1}.jpg`, 
+                { type: 'image/jpeg' }
+              );
+              frames.push(frameFile);
+              setExtractedFrameCount(frames.length);
+            }
+            currentFrame++;
+            captureFrame();
+          }, 'image/jpeg', 0.9);
+        };
+        
+        captureFrame();
+      };
+      
+      video.onerror = () => {
+        reject(new Error('Failed to load video'));
+        URL.revokeObjectURL(video.src);
+      };
+      
+      video.src = URL.createObjectURL(videoFile);
+    });
   };
 
   const handleAnalyze = async () => {
@@ -341,16 +455,28 @@ export default function AdvancedMedicalImaging({ patientId, encounterId, userId,
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept={mode === 'video' ? 'video/*,image/*' : 'image/*'}
             multiple={mode === 'compare' || mode === 'video'}
             onChange={handleFileSelect}
             className="hidden"
           />
-          {files.length > 0 ? (
+          {/* Hidden canvas for video frame extraction */}
+          <canvas ref={canvasRef} className="hidden" />
+          {isExtractingFrames ? (
+            <div>
+              <div className="w-8 h-8 border-3 border-black/20 border-t-black rounded-full animate-spin mx-auto" />
+              <div className="text-sm font-medium text-black mt-3">
+                Extracting frames from video...
+              </div>
+              <div className="text-xs text-black/50 mt-1">
+                {extractedFrameCount}/8 frames extracted
+              </div>
+            </div>
+          ) : files.length > 0 ? (
             <div>
               <span className="text-3xl">✅</span>
               <div className="text-sm font-medium text-black mt-2">
-                {files.length} file(s) selected
+                {videoFile ? `${files.length} frames extracted from video` : `${files.length} file(s) selected`}
               </div>
               <div className="text-xs text-black/50">Click to change</div>
             </div>
@@ -359,11 +485,13 @@ export default function AdvancedMedicalImaging({ patientId, encounterId, userId,
               <span className="text-4xl">📤</span>
               <div className="text-sm font-medium text-black mt-2">
                 {mode === 'compare' ? 'Drop 2-4 images to compare' : 
-                 mode === 'video' ? 'Drop video frames (up to 8)' :
+                 mode === 'video' ? 'Upload video or drop frames (up to 8)' :
                  'Drop medical image or click to browse'}
               </div>
               <div className="text-xs text-black/50 mt-1">
-                Supports JPG, PNG, DICOM preview
+                {mode === 'video' 
+                  ? 'Supports MP4, WebM, MOV videos or JPG/PNG frames'
+                  : 'Supports JPG, PNG, DICOM preview'}
               </div>
             </div>
           )}
