@@ -4115,6 +4115,7 @@ async def predict_multi_disease(
     on_bp_meds_val = get_val('on_bp_medication', patient.on_bp_medication)
     egfr_val = get_val('egfr', patient.egfr)  # For unified model
     has_diabetes_val = patient.has_diabetes if patient.has_diabetes is not None else (1 if hba1c_val >= 6.5 else 0)
+    exercise_val = patient.exercise_hours_weekly or 2.5  # Default to moderate exercise
     
     # Legacy patient features dict (using imputed values for compatibility)
     patient_features = {
