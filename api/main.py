@@ -9008,9 +9008,10 @@ async def create_authorized_encounter(
     
     # Log successful creation
     log_access_attempt(
-        user_id=user_id, role=user_role, action="create_encounter",
-        patient_id=body.patient_id, encounter_id=encounter_id,
-        purpose=body.purpose, status="granted"
+        user_id=user_id, role=user_role, purpose=body.purpose,
+        data_type="encounter", granted=True,
+        reason=f"Created encounter {encounter_id}",
+        patient_id=body.patient_id
     )
     
     return {
