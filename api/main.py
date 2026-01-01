@@ -32,6 +32,7 @@ ml_module.disease_model = ml_disease_model
 
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 # sqlite3 import removed - using PostgreSQL via execute_query
@@ -183,6 +184,24 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# Global exception handler to ensure CORS headers on errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch all unhandled exceptions and return JSON with CORS headers"""
+    import traceback
+    error_detail = str(exc)
+    print(f"[ERROR] Unhandled exception: {error_detail}")
+    print(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error", "detail": error_detail},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 # Include cloud model router (Evo 2 DNA + GLM-4.5V Vision)
 if CLOUD_MODELS_AVAILABLE:
