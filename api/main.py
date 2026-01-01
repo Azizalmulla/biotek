@@ -5778,7 +5778,13 @@ async def optimize_treatment(
         needs_sglt2 = hba1c >= 7.5 and risk >= 50
         needs_glp1 = bmi >= 30 and hba1c >= 7.0
         
-        prompt = f"""You are a clinical pharmacologist creating a SPECIFIC, ACTIONABLE treatment protocol.
+        # Calculate specific lifestyle targets
+        daily_calories = int(2000 - (500 if bmi >= 25 else 0))  # Caloric deficit if overweight
+        protein_grams = int(bmi * 2.2 * 0.8)  # 0.8g per kg ideal body weight
+        carb_grams = int(daily_calories * 0.4 / 4)  # 40% carbs
+        exercise_mins = 150 if risk < 50 else 200  # More if high risk
+        
+        prompt = f"""You are a clinical specialist creating a COMPREHENSIVE treatment protocol combining pharmacotherapy AND lifestyle medicine.
 
 Patient Profile:
 - Risk Score: {risk}% ({"HIGH" if risk >= 50 else "MODERATE" if risk >= 30 else "LOW"} risk)
@@ -5787,33 +5793,57 @@ Patient Profile:
 - Age: {age} years
 - Blood Pressure: {bp_systolic}/{bp_diastolic} mmHg ({"hypertensive" if bp_systolic >= 140 else "elevated" if bp_systolic >= 130 else "normal"})
 
-DO NOT give generic "eat healthy and exercise" advice. Give SPECIFIC clinical interventions.
+Create a comprehensive protocol with BOTH medications AND specific lifestyle interventions.
 
 ### Pharmacotherapy Protocol
 
 **First-Line Medications:**
-{f"- **Metformin** 500mg BID → titrate to 1000mg BID over 4 weeks (renal: check eGFR)" if needs_metformin else "- No glucose-lowering medication indicated at this time"}
+{f"- **Metformin** 500mg BID → titrate to 1000mg BID over 4 weeks (check eGFR before starting)" if needs_metformin else "- No glucose-lowering medication indicated at current HbA1c"}
 {f"- **Atorvastatin** 20mg QHS for primary CV prevention (LDL target <100 mg/dL)" if needs_statin else ""}
 {f"- **Lisinopril** 10mg daily for BP control and renal protection" if needs_ace_arb else ""}
 
 **Consider Adding (if targets not met by week 12):**
-{f"- **Empagliflozin** (SGLT2i) 10mg daily - CV/renal benefit + weight loss" if needs_sglt2 else ""}
-{f"- **Semaglutide** (GLP-1 RA) 0.25mg SC weekly → titrate to 1mg - significant A1c + weight reduction" if needs_glp1 else ""}
+{f"- **Empagliflozin** (SGLT2i) 10mg daily - CV/renal benefit + weight loss" if needs_sglt2 else "- SGLT2i if additional CV protection needed"}
+{f"- **Semaglutide** (GLP-1 RA) 0.25mg SC weekly → titrate to 1mg" if needs_glp1 else ""}
+
+### Medical Nutrition Therapy
+
+**Daily Targets:**
+- Calories: {daily_calories} kcal/day ({"-500 deficit" if bmi >= 25 else "maintenance"})
+- Protein: {protein_grams}g/day (lean meats, fish, legumes)
+- Carbohydrates: {carb_grams}g/day (complex carbs, whole grains)
+- Sodium: <2,300mg/day {"(<1,500mg if BP elevated)" if bp_systolic >= 130 else ""}
+- Fiber: ≥35g/day (vegetables, legumes, whole grains)
+
+**Specific Dietary Pattern:** {"DASH diet (proven -11 mmHg systolic)" if bp_systolic >= 130 else "Mediterranean diet (reduces CV events 30%)"}
+
+### Exercise Prescription
+
+**Aerobic Training:**
+- Type: {"Walking, cycling, swimming (low-impact)" if age >= 60 else "Brisk walking, jogging, cycling"}
+- Duration: {exercise_mins} min/week total
+- Frequency: 5 days/week × {exercise_mins // 5} min/session
+- Intensity: {"50-60% max HR (220-{age}={220-age}, target {int((220-age)*0.55)}-{int((220-age)*0.6)} bpm)" if age >= 60 else f"60-70% max HR (target {int((220-age)*0.6)}-{int((220-age)*0.7)} bpm)"}
+
+**Resistance Training:**
+- Frequency: 2-3 days/week (non-consecutive)
+- Focus: Major muscle groups, 8-12 reps × 2-3 sets
+- Benefit: Improves insulin sensitivity by 25%
 
 ### Monitoring Schedule
 | Test | Frequency | Target |
 |------|-----------|--------|
 | HbA1c | Every 3 months | <{target_hba1c:.1f}% |
-| Fasting lipid panel | Baseline + 6 weeks | LDL <100 mg/dL |
-| Comprehensive metabolic panel | Baseline + 4 weeks | eGFR >60, K+ 3.5-5.0 |
-| Blood pressure | Each visit | <130/80 mmHg |
-| Weight | Weekly (patient) | -{bmi - target_bmi:.0f} kg over 12 weeks |
+| Fasting Lipid Panel | Baseline + 6w | LDL <100 mg/dL |
+| Comprehensive Metabolic Panel | Baseline + 4w | eGFR >60, K+ 3.5-5.0 |
+| Blood Pressure | Each visit | <130/80 mmHg |
+| Weight | Weekly (self) | -{bmi - target_bmi:.0f} kg over 12w |
 
 ### Specialist Referrals
-- **Endocrinology**: If HbA1c remains >{hba1c + 0.5:.1f}% after 3 months on dual therapy
-- **Cardiology**: If risk score >{risk}% or new CV symptoms
-- **Registered Dietitian**: Medical nutrition therapy consult (CPT 97802)
-- **Diabetes Care & Education Specialist**: For insulin initiation if needed
+- **Endocrinology**: If HbA1c >{hba1c + 0.5:.1f}% at 3m
+- **Cardiology**: New CV symptoms or risk >{risk}%
+- **Registered Dietitian**: CPT 97802
+- **Diabetes Educator**: Insulin initiation if needed
 
 ### Specific Targets (3-Month Goals)
 | Metric | Current | Target | Expected Change |
@@ -5824,11 +5854,11 @@ DO NOT give generic "eat healthy and exercise" advice. Give SPECIFIC clinical in
 | CV Risk | {risk}% | {max(5, risk - risk_reduction):.0f}% | -{risk_reduction:.0f}% |
 
 ### Follow-up Schedule
-- **Week 2**: Phone check - medication tolerance, side effects
+- **Week 2**: Phone - medication tolerance, diet adherence
 - **Week 4**: In-person - labs, BP, dose titration
-- **Week 12**: Full reassessment - repeat HbA1c, lipids, adjust protocol
+- **Week 12**: Full reassessment - HbA1c, lipids, adjust protocol
 
-Be concise. Use the exact values provided. Do NOT add generic lifestyle advice."""
+Use the exact values provided."""
 
         # Call GLM-4.5V via OpenRouter
         try:
@@ -5837,25 +5867,38 @@ Be concise. Use the exact values provided. Do NOT add generic lifestyle advice."
             protocol = result.get("choices", [{}])[0].get("message", {}).get("content", "Unable to generate protocol")
         except Exception as api_error:
             print(f"OpenRouter API error in treatment optimizer: {api_error}")
-            # Fallback protocol - specific clinical interventions
+            # Fallback protocol - comprehensive with both meds and lifestyle
             protocol = f"""### Pharmacotherapy Protocol
 
 **First-Line Medications:**
-{f"- **Metformin** 500mg BID → titrate to 1000mg BID over 4 weeks (check eGFR before starting)" if needs_metformin else "- No glucose-lowering medication indicated at current HbA1c"}
-{f"- **Atorvastatin** 20mg QHS for primary CV prevention (target LDL <100 mg/dL)" if needs_statin else ""}
-{f"- **Lisinopril** 10mg daily for BP control and renal protection" if needs_ace_arb else ""}
+{f"- **Metformin** 500mg BID → titrate to 1000mg BID over 4 weeks (check eGFR)" if needs_metformin else "- No glucose-lowering medication indicated"}
+{f"- **Atorvastatin** 20mg QHS for CV prevention (LDL target <100)" if needs_statin else ""}
+{f"- **Lisinopril** 10mg daily for BP control" if needs_ace_arb else ""}
 
-**Consider Adding (if targets not met by week 12):**
-{f"- **Empagliflozin** (SGLT2i) 10mg daily - CV/renal benefit + weight loss" if needs_sglt2 else "- SGLT2i if eGFR >30 and additional CV protection needed"}
-{f"- **Semaglutide** (GLP-1 RA) 0.25mg SC weekly → titrate to 1mg" if needs_glp1 else ""}
+**Consider Adding (week 12 if targets unmet):**
+{f"- **Empagliflozin** (SGLT2i) 10mg daily" if needs_sglt2 else ""}
+{f"- **Semaglutide** (GLP-1 RA) 0.25mg → 1mg SC weekly" if needs_glp1 else ""}
+
+### Medical Nutrition Therapy
+
+**Daily Targets:** {daily_calories} kcal, {protein_grams}g protein, {carb_grams}g carbs, <2300mg sodium, ≥35g fiber
+
+**Diet Pattern:** {"DASH diet (-11 mmHg systolic)" if bp_systolic >= 130 else "Mediterranean diet (-30% CV events)"}
+
+### Exercise Prescription
+
+**Aerobic:** {exercise_mins} min/week, 5 days × {exercise_mins // 5} min, {f"{int((220-age)*0.6)}-{int((220-age)*0.7)} bpm target HR"}
+
+**Resistance:** 2-3 days/week, major muscle groups, 8-12 reps × 2-3 sets
 
 ### Monitoring Schedule
 | Test | Frequency | Target |
 |------|-----------|--------|
 | HbA1c | Every 3 months | <{target_hba1c:.1f}% |
-| Fasting lipid panel | Baseline + 6 weeks | LDL <100 mg/dL |
-| Comprehensive metabolic panel | Baseline + 4 weeks | eGFR >60, K+ 3.5-5.0 |
-| Blood pressure | Each visit | <130/80 mmHg |
+| Fasting Lipid Panel | Baseline + 6w | LDL <100 mg/dL |
+| Comprehensive Metabolic Panel | Baseline + 4w | eGFR >60, K+ 3.5-5.0 |
+| Blood Pressure | Each visit | <130/80 mmHg |
+| Weight | Weekly (self) | -{bmi - target_bmi:.0f} kg over 12w |
 
 ### Specific Targets (3-Month Goals)
 | Metric | Current | Target | Expected Change |
@@ -5866,11 +5909,11 @@ Be concise. Use the exact values provided. Do NOT add generic lifestyle advice."
 | CV Risk | {risk}% | {max(5, risk - risk_reduction):.0f}% | -{risk_reduction:.0f}% |
 
 ### Follow-up Schedule
-- **Week 2**: Phone check - medication tolerance, side effects
+- **Week 2**: Phone - medication tolerance, diet adherence
 - **Week 4**: In-person - labs, BP, dose titration  
-- **Week 12**: Full reassessment - repeat HbA1c, lipids, adjust protocol
+- **Week 12**: Full reassessment - HbA1c, lipids, adjust protocol
 
-*Protocol based on ADA/EASD 2024 guidelines.*"""
+*ADA/EASD 2024 guidelines.*"""
         
         # Calculate rough confidence based on how standard the case is
         confidence = 84 if 6.5 < hba1c < 8.0 and 25 < bmi < 35 else 76
