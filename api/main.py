@@ -9018,7 +9018,7 @@ async def create_authorized_encounter(
     
     encounter_id = auth_engine.create_encounter(encounter)
     
-    # Log successful creation
+    # Log to PostgreSQL audit system
     log_access_attempt(
         user_id=user_id, role=user_role, purpose=body.purpose,
         data_type="encounter", granted=True,

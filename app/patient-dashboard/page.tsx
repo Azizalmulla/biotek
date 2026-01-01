@@ -77,31 +77,19 @@ export default function PatientDashboard() {
       setMyPredictions([]);
     }
 
-    // Load who accessed my data - use new RBAC audit trail endpoint
+    // Load who accessed my data - from PostgreSQL audit log
     try {
-      const response = await fetch(`${API_BASE}/auth/audit/patient/${patientId}?limit=50`, {
-        headers: {
-          'X-User-ID': patientId,
-          'X-User-Role': 'patient'
-        }
-      });
+      const response = await fetch(`${API_BASE}/audit/access-log?limit=50`);
       const data = await response.json();
       
-      // Real audit trail from RBAC system
-      setAccessLog(data.audit_trail || []);
+      // Filter to accesses related to this patient
+      const myAccess = data.access_logs?.filter((log: any) => 
+        log.patient_id && log.patient_id.includes(patientId)
+      ) || [];
+      setAccessLog(myAccess);
     } catch (error) {
       console.error('Failed to load access log:', error);
-      // Fallback to old endpoint if new one fails
-      try {
-        const fallbackResponse = await fetch(`${API_BASE}/audit/access-log?limit=50`);
-        const fallbackData = await fallbackResponse.json();
-        const myAccess = fallbackData.access_logs?.filter((log: any) => 
-          log.patient_id && log.patient_id.includes(patientId)
-        ) || [];
-        setAccessLog(myAccess);
-      } catch {
-        setAccessLog([]);
-      }
+      setAccessLog([]);
     }
 
     // Load my clinical data
