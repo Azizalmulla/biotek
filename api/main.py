@@ -177,10 +177,11 @@ async def root():
 # CORS middleware for Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001", "https://biotek.vercel.app", "https://biotek-aj3eojm6x-azizalmulla16-gmailcoms-projects.vercel.app"],
+    allow_origins=["*"],  # Allow all origins for now - can restrict later
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include cloud model router (Evo 2 DNA + GLM-4.5V Vision)
