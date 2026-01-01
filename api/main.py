@@ -1981,6 +1981,51 @@ async def login_staff(request: StaffLoginRequest):
     Healthcare worker login with password verification
     """
     try:
+        # DEMO MODE: Allow demo accounts for testing (password: 'demo123')
+        demo_accounts = {
+            'doctor_DOC001': {'role': 'doctor', 'full_name': 'Dr. Sarah Smith', 'email': 'dr.smith@biotek.health'},
+            'nurse_NUR001': {'role': 'nurse', 'full_name': 'Nurse Jones', 'email': 'nurse.jones@biotek.health'},
+            'researcher_RES001': {'role': 'researcher', 'full_name': 'Dr. Chen', 'email': 'researcher.chen@biotek.health'},
+            'receptionist_REC001': {'role': 'receptionist', 'full_name': 'Front Desk', 'email': 'frontdesk@biotek.health'},
+            'admin_001': {'role': 'admin', 'full_name': 'System Admin', 'email': 'admin@biotek.health'},
+        }
+        
+        if request.user_id in demo_accounts and request.password == 'demo123':
+            demo = demo_accounts[request.user_id]
+            role = demo['role']
+            email = demo['email']
+            full_name = demo['full_name']
+            
+            # Sync to RBAC
+            try:
+                from authorization import auth_engine, StaffUser, Role as AuthRole
+                existing = auth_engine.get_user(request.user_id)
+                if not existing:
+                    staff_user = StaffUser(
+                        user_id=request.user_id,
+                        username=email.split('@')[0],
+                        role=AuthRole(role),
+                        department='Demo'
+                    )
+                    auth_engine.create_user(staff_user, request.user_id)
+            except Exception as sync_err:
+                print(f"RBAC sync warning: {sync_err}")
+            
+            # Create session
+            session = create_session(request.user_id, role)
+            access_token = create_access_token({"sub": request.user_id, "role": role, "email": email})
+            role_enum = Role(role)
+            allowed_purposes = list(get_allowed_purposes(role_enum))
+            
+            log_access_attempt(user_id=request.user_id, role=role, purpose="login",
+                             data_type="authentication", granted=True, reason="Demo login")
+            
+            return StaffLoginResponse(
+                session_id=session["session_id"], user_id=request.user_id, email=email,
+                role=role_enum, full_name=full_name, access_token=access_token,
+                expires_at=session["expires_at"], allowed_purposes=allowed_purposes
+            )
+        
         # Get staff account using PostgreSQL-compatible query
         result = execute_query("""
             SELECT password_hash, email, role, full_name, activated,
@@ -2042,6 +2087,22 @@ async def login_staff(request: StaffLoginRequest):
         # Get allowed purposes
         role_enum = Role(role)
         allowed_purposes = list(get_allowed_purposes(role_enum))
+        
+        # Sync user to RBAC staff_users table (for encounters/audit)
+        try:
+            from authorization import auth_engine, StaffUser, Role as AuthRole
+            existing = auth_engine.get_user(request.user_id)
+            if not existing:
+                # Create user in RBAC system
+                staff_user = StaffUser(
+                    user_id=request.user_id,
+                    username=email.split('@')[0] if email else request.user_id,
+                    role=AuthRole(role),
+                    department=None
+                )
+                auth_engine.create_user(staff_user, request.user_id)
+        except Exception as sync_err:
+            print(f"RBAC sync warning (non-fatal): {sync_err}")
         
         # Log successful login
         log_access_attempt(
