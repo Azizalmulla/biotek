@@ -5771,51 +5771,64 @@ async def optimize_treatment(
         target_bp_dia = max(75, bp_diastolic - 5)
         risk_reduction = min(25, max(10, risk * 0.3)) if risk > 0 else 15
         
-        prompt = f"""You are a clinical decision support AI creating an evidence-based treatment protocol.
+        # Determine medication recommendations based on patient values
+        needs_metformin = hba1c >= 6.5 or risk >= 40
+        needs_statin = risk >= 30 or age >= 50
+        needs_ace_arb = bp_systolic >= 140 or bp_diastolic >= 90
+        needs_sglt2 = hba1c >= 7.5 and risk >= 50
+        needs_glp1 = bmi >= 30 and hba1c >= 7.0
+        
+        prompt = f"""You are a clinical pharmacologist creating a SPECIFIC, ACTIONABLE treatment protocol.
 
 Patient Profile:
-- Current Risk Score: {risk}%
-- HbA1c: {hba1c}%
-- BMI: {bmi} kg/m²
+- Risk Score: {risk}% ({"HIGH" if risk >= 50 else "MODERATE" if risk >= 30 else "LOW"} risk)
+- HbA1c: {hba1c}% ({"above target" if hba1c >= 7.0 else "at target" if hba1c >= 5.7 else "normal"})
+- BMI: {bmi} kg/m² ({"obese" if bmi >= 30 else "overweight" if bmi >= 25 else "normal"})
 - Age: {age} years
-- Blood Pressure: {bp_systolic}/{bp_diastolic} mmHg
+- Blood Pressure: {bp_systolic}/{bp_diastolic} mmHg ({"hypertensive" if bp_systolic >= 140 else "elevated" if bp_systolic >= 130 else "normal"})
 
-Create a structured 3-phase treatment protocol following ADA/EASD guidelines.
+DO NOT give generic "eat healthy and exercise" advice. Give SPECIFIC clinical interventions.
 
-IMPORTANT: Include this exact metrics table at the end with the values filled in:
+### Pharmacotherapy Protocol
 
-| Metric | Baseline | Target (Month 3) | Reduction/Risk Change |
-|--------|----------|------------------|----------------------|
+**First-Line Medications:**
+{f"- **Metformin** 500mg BID → titrate to 1000mg BID over 4 weeks (renal: check eGFR)" if needs_metformin else "- No glucose-lowering medication indicated at this time"}
+{f"- **Atorvastatin** 20mg QHS for primary CV prevention (LDL target <100 mg/dL)" if needs_statin else ""}
+{f"- **Lisinopril** 10mg daily for BP control and renal protection" if needs_ace_arb else ""}
+
+**Consider Adding (if targets not met by week 12):**
+{f"- **Empagliflozin** (SGLT2i) 10mg daily - CV/renal benefit + weight loss" if needs_sglt2 else ""}
+{f"- **Semaglutide** (GLP-1 RA) 0.25mg SC weekly → titrate to 1mg - significant A1c + weight reduction" if needs_glp1 else ""}
+
+### Monitoring Schedule
+| Test | Frequency | Target |
+|------|-----------|--------|
+| HbA1c | Every 3 months | <{target_hba1c:.1f}% |
+| Fasting lipid panel | Baseline + 6 weeks | LDL <100 mg/dL |
+| Comprehensive metabolic panel | Baseline + 4 weeks | eGFR >60, K+ 3.5-5.0 |
+| Blood pressure | Each visit | <130/80 mmHg |
+| Weight | Weekly (patient) | -{bmi - target_bmi:.0f} kg over 12 weeks |
+
+### Specialist Referrals
+- **Endocrinology**: If HbA1c remains >{hba1c + 0.5:.1f}% after 3 months on dual therapy
+- **Cardiology**: If risk score >{risk}% or new CV symptoms
+- **Registered Dietitian**: Medical nutrition therapy consult (CPT 97802)
+- **Diabetes Care & Education Specialist**: For insulin initiation if needed
+
+### Specific Targets (3-Month Goals)
+| Metric | Current | Target | Expected Change |
+|--------|---------|--------|-----------------|
 | HbA1c | {hba1c}% | {target_hba1c:.1f}% | -{hba1c - target_hba1c:.1f}% |
 | BMI | {bmi} | {target_bmi:.1f} | -{bmi - target_bmi:.1f} kg/m² |
 | Blood Pressure | {bp_systolic}/{bp_diastolic} | {target_bp_sys}/{target_bp_dia} | -{bp_systolic - target_bp_sys}/{bp_diastolic - target_bp_dia} mmHg |
-| Risk Score | {risk}% | {max(5, risk - risk_reduction):.0f}% | -{risk_reduction:.0f}% |
+| CV Risk | {risk}% | {max(5, risk - risk_reduction):.0f}% | -{risk_reduction:.0f}% |
 
-Structure your response as:
+### Follow-up Schedule
+- **Week 2**: Phone check - medication tolerance, side effects
+- **Week 4**: In-person - labs, BP, dose titration
+- **Week 12**: Full reassessment - repeat HbA1c, lipids, adjust protocol
 
-### Treatment Protocol for Risk Reduction
-Goal: Reduce HbA1c to <{target_hba1c:.1f}% and BMI to <{target_bmi:.0f} kg/m² via sustainable behavioral changes.
-
-# Dietary Recommendations
-- Pattern: Mediterranean Diet (40% complex carbs, 30% healthy fats, 30% lean protein)
-- Specifics: Limit added sugars (<10% daily calories), saturated fat (<7% daily calories)
-- Prioritize fiber-rich foods (≥35g/day: vegetables, legumes, whole grains)
-- Include omega-3 sources (salmon, walnuts) 2x/week
-- Caloric Deficit: 500 kcal/day reduction
-
-# Exercise Prescription
-- Frequency: 150 min/week moderate-intensity aerobic exercise + 2 sessions strength training
-- Intensity: 60-70% max heart rate (e.g., brisk walking, cycling)
-- Duration: 30 min/session, split as 5 days/week (aerobic) + 2 days/week (strength)
-
-# Behavioral Modifications
-- Self-Monitoring: Daily food/activity logs + weekly weigh-ins
-- Cognitive Strategies: Goal-setting (e.g., "lose 5% body weight in 12 weeks")
-- Support: Referral to certified diabetes educator (CDE)
-
-Then include the metrics table above.
-
-Do NOT use placeholder dashes (--) in the table. Use the actual values provided."""
+Be concise. Use the exact values provided. Do NOT add generic lifestyle advice."""
 
         # Call GLM-4.5V via OpenRouter
         try:
@@ -5824,33 +5837,38 @@ Do NOT use placeholder dashes (--) in the table. Use the actual values provided.
             protocol = result.get("choices", [{}])[0].get("message", {}).get("content", "Unable to generate protocol")
         except Exception as api_error:
             print(f"OpenRouter API error in treatment optimizer: {api_error}")
-            # Fallback protocol based on guidelines - WITH ACTUAL PATIENT DATA
-            protocol = f"""### Treatment Protocol for Risk Reduction
-Goal: Reduce HbA1c to <{target_hba1c:.1f}% and BMI to <{target_bmi:.0f} kg/m² via sustainable behavioral changes.
+            # Fallback protocol - specific clinical interventions
+            protocol = f"""### Pharmacotherapy Protocol
 
-# Dietary Recommendations
-- Pattern: Mediterranean Diet (40% complex carbs, 30% healthy fats, 30% lean protein)
-- Specifics: Limit added sugars (<10% daily calories), saturated fat (<7% daily calories)
-- Prioritize fiber-rich foods (≥35g/day: vegetables, legumes, whole grains)
-- Include omega-3 sources (salmon, walnuts) 2x/week
-- Caloric Deficit: 500 kcal/day reduction (e.g., 1,800 kcal/day for sedentary adults)
+**First-Line Medications:**
+{f"- **Metformin** 500mg BID → titrate to 1000mg BID over 4 weeks (check eGFR before starting)" if needs_metformin else "- No glucose-lowering medication indicated at current HbA1c"}
+{f"- **Atorvastatin** 20mg QHS for primary CV prevention (target LDL <100 mg/dL)" if needs_statin else ""}
+{f"- **Lisinopril** 10mg daily for BP control and renal protection" if needs_ace_arb else ""}
 
-# Exercise Prescription
-- Frequency: 150 min/week moderate-intensity aerobic exercise + 2 sessions strength training
-- Intensity: 60-70% max heart rate (e.g., brisk walking, cycling)
-- Duration: 30 min/session, split as 5 days/week (aerobic) + 2 days/week (strength)
+**Consider Adding (if targets not met by week 12):**
+{f"- **Empagliflozin** (SGLT2i) 10mg daily - CV/renal benefit + weight loss" if needs_sglt2 else "- SGLT2i if eGFR >30 and additional CV protection needed"}
+{f"- **Semaglutide** (GLP-1 RA) 0.25mg SC weekly → titrate to 1mg" if needs_glp1 else ""}
 
-# Behavioral Modifications
-- Self-Monitoring: Daily food/activity logs + weekly weigh-ins
-- Cognitive Strategies: Goal-setting (e.g., "lose 5% body weight in 12 weeks")
-- Support: Referral to certified diabetes educator (CDE) or online program
+### Monitoring Schedule
+| Test | Frequency | Target |
+|------|-----------|--------|
+| HbA1c | Every 3 months | <{target_hba1c:.1f}% |
+| Fasting lipid panel | Baseline + 6 weeks | LDL <100 mg/dL |
+| Comprehensive metabolic panel | Baseline + 4 weeks | eGFR >60, K+ 3.5-5.0 |
+| Blood pressure | Each visit | <130/80 mmHg |
 
-| Metric | Baseline | Target (Month 3) | Reduction/Risk Change |
-|--------|----------|------------------|----------------------|
+### Specific Targets (3-Month Goals)
+| Metric | Current | Target | Expected Change |
+|--------|---------|--------|-----------------|
 | HbA1c | {hba1c}% | {target_hba1c:.1f}% | -{hba1c - target_hba1c:.1f}% |
 | BMI | {bmi} | {target_bmi:.1f} | -{bmi - target_bmi:.1f} kg/m² |
 | Blood Pressure | {bp_systolic}/{bp_diastolic} | {target_bp_sys}/{target_bp_dia} | -{bp_systolic - target_bp_sys}/{bp_diastolic - target_bp_dia} mmHg |
-| Risk Score | {risk}% | {max(5, risk - risk_reduction):.0f}% | -{risk_reduction:.0f}% |
+| CV Risk | {risk}% | {max(5, risk - risk_reduction):.0f}% | -{risk_reduction:.0f}% |
+
+### Follow-up Schedule
+- **Week 2**: Phone check - medication tolerance, side effects
+- **Week 4**: In-person - labs, BP, dose titration  
+- **Week 12**: Full reassessment - repeat HbA1c, lipids, adjust protocol
 
 *Protocol based on ADA/EASD 2024 guidelines.*"""
         
