@@ -155,6 +155,22 @@ export default function MultiDiseaseRisk({
   const [patientDataSource, setPatientDataSource] = useState<'default' | 'loaded' | 'manual'>('default');
   const [patientMetadata, setPatientMetadata] = useState<{ updated_at?: string; updated_by?: string } | null>(null);
   const [result, setResult] = useState<PredictionResult | null>(null);
+  
+  // Helper to create headers with RBAC context
+  const getAuthHeaders = (contentType?: string) => {
+    const headers: Record<string, string> = {
+      'X-User-ID': userId,
+      'X-User-Role': userRole,
+      'X-Purpose': 'treatment',
+    };
+    if (currentEncounterId || encounterIdRef.current) {
+      headers['X-Encounter-ID'] = currentEncounterId || encounterIdRef.current || '';
+    }
+    if (contentType) {
+      headers['Content-Type'] = contentType;
+    }
+    return headers;
+  };
 
   // Load patient data when patientId changes
   useEffect(() => {
@@ -169,10 +185,7 @@ export default function MultiDiseaseRisk({
       setIsLoadingPatient(true);
       try {
         const response = await fetch(`${API_BASE}/patient/${patientId}/clinical-data`, {
-          headers: {
-            'X-User-ID': userId,
-            'X-User-Role': userRole,
-          },
+          headers: getAuthHeaders(),
         });
 
         if (response.ok) {
@@ -212,7 +225,7 @@ export default function MultiDiseaseRisk({
     try {
       await fetch(`${API_BASE}/patient/save-clinical-data`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders('application/json'),
         body: JSON.stringify({
           patient_data: {
             patient_id: patientId,
@@ -261,10 +274,7 @@ export default function MultiDiseaseRisk({
       setGeneticsLoading(true);
       try {
         const response = await fetch(`${API_BASE}/patient/${patientId}/genetic-results`, {
-          headers: {
-            'X-User-ID': userId,
-            'X-User-Role': userRole || 'doctor',
-          },
+          headers: getAuthHeaders(),
         });
         if (response.ok) {
           const data = await response.json();
