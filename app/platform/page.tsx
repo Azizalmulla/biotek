@@ -1604,9 +1604,24 @@ export default function PlatformPage() {
                               );
                             }
                             
+                            // Skip horizontal rules (---, ---)
+                            if (trimmed.match(/^-{2,}$/) || trimmed === '---') {
+                              return null;
+                            }
+                            
                             // Tables and content - handle metrics table properly
                             if (trimmed.includes('|')) {
-                              const rows = trimmed.split('\n').filter(r => r.includes('|') && !r.match(/^\|[-:]+\|/));
+                              // Filter out separator rows (|---|---|) and empty rows
+                              const rows = trimmed.split('\n').filter(r => {
+                                if (!r.includes('|')) return false;
+                                if (r.match(/^\|[\s-:]+\|$/)) return false;  // separator row
+                                if (r.match(/^[\s|:-]+$/)) return false;  // only dashes/colons
+                                const cells = r.split('|').filter(c => c.trim());
+                                return cells.length > 0;
+                              });
+                              
+                              if (rows.length === 0) return null;
+                              
                               // Detect number of columns from first row
                               const firstRowCells = rows[0]?.split('|').filter(c => c.trim()) || [];
                               const numCols = Math.min(firstRowCells.length, 4);
@@ -1616,13 +1631,15 @@ export default function PlatformPage() {
                                 <div key={idx} className="bg-white rounded-2xl border border-black/10 overflow-hidden">
                                   {rows.map((row, rowIdx) => {
                                     const cells = row.split('|').filter(c => c.trim());
+                                    if (cells.length === 0) return null;
                                     const isHeader = rowIdx === 0;
                                     return (
                                       <div key={rowIdx} className={`grid ${gridClass} ${isHeader ? 'bg-stone-100 font-semibold' : 'border-t border-black/5'}`}>
                                         {cells.slice(0, numCols).map((cell, cellIdx) => {
-                                          // Clean cell content - skip if only dashes
+                                          // Clean cell content
                                           let content = cell.replace(/\*\*/g, '').trim();
-                                          if (content === '--' || content === '-' || content === '—') {
+                                          // Replace dash placeholders
+                                          if (content.match(/^-{1,3}$/) || content === '—') {
                                             content = 'N/A';
                                           }
                                           return (
