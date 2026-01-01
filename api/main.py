@@ -66,6 +66,14 @@ from access_control import (
     check_access, get_allowed_purposes, get_allowed_data_types
 )
 
+# Import production-grade authorization system
+from authorization import (
+    auth_engine, AuthorizationEngine, AuthorizationRequest, AuthorizationResult,
+    Encounter, EncounterStatus, PatientConsent, AuditLog, StaffUser,
+    Permission, Purpose as AuthPurpose, DataType as AuthDataType, AccessStatus,
+    ROLE_PERMISSIONS, log_access_attempt
+)
+
 # Import authentication utilities
 from auth import (
     hash_password, verify_password, create_access_token,
@@ -8886,6 +8894,474 @@ async def get_patient_encounters(
             "total": 0,
             "note": "Demo mode - no persisted encounters"
         }
+
+
+# =============================================================================
+# PRODUCTION-GRADE RBAC ENDPOINTS
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# ENCOUNTER MANAGEMENT (Required for clinical data access)
+# -----------------------------------------------------------------------------
+
+class EncounterCreateRequest(BaseModel):
+    patient_id: str
+    purpose: str = "treatment"
+    justification: Optional[str] = None
+    assigned_staff: List[str] = []
+
+@app.post("/auth/encounters")
+async def create_authorized_encounter(
+    request: Request,
+    body: EncounterCreateRequest,
+    user_role: str = Header(default="doctor", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """
+    Create a new encounter for patient access.
+    Required before accessing any clinical data.
+    """
+    # Check if role can create encounters
+    role = Role(user_role) if user_role in [r.value for r in Role] else Role.PATIENT
+    if role not in [Role.DOCTOR, Role.NURSE, Role.ADMIN]:
+        log_access_attempt(
+            user_id=user_id, role=user_role, action="create_encounter",
+            patient_id=body.patient_id, status="denied",
+            reason="Role cannot create encounters"
+        )
+        raise HTTPException(status_code=403, detail="Role cannot create encounters")
+    
+    # Create encounter
+    purpose = AuthPurpose(body.purpose) if body.purpose in [p.value for p in AuthPurpose] else AuthPurpose.TREATMENT
+    encounter = Encounter(
+        patient_id=body.patient_id,
+        created_by=user_id,
+        assigned_staff=[user_id] + body.assigned_staff,
+        status=EncounterStatus.ACTIVE,
+        purpose=purpose,
+        justification=body.justification
+    )
+    
+    encounter_id = auth_engine.create_encounter(encounter)
+    
+    # Log successful creation
+    log_access_attempt(
+        user_id=user_id, role=user_role, action="create_encounter",
+        patient_id=body.patient_id, encounter_id=encounter_id,
+        purpose=body.purpose, status="granted"
+    )
+    
+    return {
+        "encounter_id": encounter_id,
+        "patient_id": body.patient_id,
+        "status": "active",
+        "purpose": body.purpose,
+        "expires_at": encounter.expires_at.isoformat(),
+        "assigned_staff": encounter.assigned_staff
+    }
+
+@app.get("/auth/encounters/{encounter_id}")
+async def get_encounter_details(
+    encounter_id: str,
+    user_role: str = Header(default="doctor", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """Get encounter details"""
+    encounter = auth_engine.get_encounter(encounter_id)
+    if not encounter:
+        raise HTTPException(status_code=404, detail="Encounter not found")
+    
+    # Check if user is assigned to encounter
+    if user_id not in encounter.get('assigned_staff', []):
+        role = Role(user_role) if user_role in [r.value for r in Role] else Role.PATIENT
+        if role != Role.ADMIN:
+            raise HTTPException(status_code=403, detail="Not assigned to this encounter")
+    
+    return encounter
+
+@app.post("/auth/encounters/{encounter_id}/complete")
+async def complete_encounter(
+    encounter_id: str,
+    user_role: str = Header(default="doctor", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """Mark encounter as completed"""
+    encounter = auth_engine.get_encounter(encounter_id)
+    if not encounter:
+        raise HTTPException(status_code=404, detail="Encounter not found")
+    
+    if encounter.get('created_by') != user_id:
+        role = Role(user_role) if user_role in [r.value for r in Role] else Role.PATIENT
+        if role != Role.ADMIN:
+            raise HTTPException(status_code=403, detail="Only encounter creator or admin can complete")
+    
+    auth_engine.update_encounter_status(encounter_id, EncounterStatus.COMPLETED)
+    
+    log_access_attempt(
+        user_id=user_id, role=user_role, action="complete_encounter",
+        patient_id=encounter.get('patient_id'), encounter_id=encounter_id,
+        status="granted"
+    )
+    
+    return {"status": "completed", "encounter_id": encounter_id}
+
+@app.get("/auth/encounters/active/{patient_id}")
+async def get_active_encounter_for_patient(
+    patient_id: str,
+    user_role: str = Header(default="doctor", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """Get active encounter for a patient-user pair"""
+    encounter = auth_engine.get_active_encounter(patient_id, user_id)
+    if not encounter:
+        return {
+            "has_active_encounter": False,
+            "patient_id": patient_id,
+            "message": "No active encounter. Create one or use break-glass for emergency."
+        }
+    return {
+        "has_active_encounter": True,
+        "encounter": encounter
+    }
+
+# -----------------------------------------------------------------------------
+# BREAK-GLASS EMERGENCY ACCESS
+# -----------------------------------------------------------------------------
+
+class BreakGlassRequest(BaseModel):
+    patient_id: str
+    reason: str
+    emergency_type: str = "clinical_emergency"
+
+@app.post("/auth/break-glass")
+async def emergency_break_glass(
+    request: Request,
+    body: BreakGlassRequest,
+    user_role: str = Header(default="doctor", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """
+    Emergency break-glass access - bypasses normal encounter requirement.
+    Creates audit trail and alerts.
+    """
+    role = Role(user_role) if user_role in [r.value for r in Role] else Role.PATIENT
+    
+    # Only doctors and admins can use break-glass
+    if Permission.BREAK_GLASS not in ROLE_PERMISSIONS.get(role, set()):
+        log_access_attempt(
+            user_id=user_id, role=user_role, action="break_glass",
+            patient_id=body.patient_id, status="denied",
+            reason="Role cannot use break-glass"
+        )
+        raise HTTPException(status_code=403, detail="Role cannot use break-glass")
+    
+    if not body.reason or len(body.reason) < 10:
+        raise HTTPException(status_code=400, detail="Break-glass requires detailed reason (min 10 chars)")
+    
+    # Create emergency encounter
+    encounter = auth_engine.create_break_glass_encounter(
+        user_id=user_id,
+        patient_id=body.patient_id,
+        reason=f"{body.emergency_type}: {body.reason}"
+    )
+    
+    # Log break-glass event
+    log_access_attempt(
+        user_id=user_id, role=user_role, action="break_glass",
+        patient_id=body.patient_id, encounter_id=encounter.id,
+        purpose="emergency", status="granted",
+        reason=body.reason, break_glass=True
+    )
+    
+    return {
+        "status": "break_glass_granted",
+        "encounter_id": encounter.id,
+        "patient_id": body.patient_id,
+        "expires_at": encounter.expires_at.isoformat(),
+        "warning": "This access is logged and will be reviewed. Use only for genuine emergencies."
+    }
+
+# -----------------------------------------------------------------------------
+# CONSENT MANAGEMENT
+# -----------------------------------------------------------------------------
+
+class ConsentUpdateRequest(BaseModel):
+    patient_id: str
+    consent_genetic: Optional[bool] = None
+    consent_imaging: Optional[bool] = None
+    consent_ai_analysis: Optional[bool] = None
+    consent_research: Optional[bool] = None
+
+@app.get("/auth/consent/{patient_id}")
+async def get_patient_consent(
+    patient_id: str,
+    user_role: str = Header(default="doctor", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """Get patient consent flags"""
+    consent = auth_engine.get_consent(patient_id)
+    if not consent:
+        # Return default consent
+        return {
+            "patient_id": patient_id,
+            "consent_genetic": False,
+            "consent_imaging": False,
+            "consent_ai_analysis": True,
+            "consent_research": False,
+            "policy_version": "1.0",
+            "is_default": True
+        }
+    return {**consent, "is_default": False}
+
+@app.post("/auth/consent")
+async def update_patient_consent(
+    body: ConsentUpdateRequest,
+    user_role: str = Header(default="doctor", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """Update patient consent flags"""
+    # Get existing consent or create default
+    existing = auth_engine.get_consent(body.patient_id)
+    
+    consent = PatientConsent(
+        patient_id=body.patient_id,
+        consent_genetic=body.consent_genetic if body.consent_genetic is not None else (existing.get('consent_genetic', 0) if existing else False),
+        consent_imaging=body.consent_imaging if body.consent_imaging is not None else (existing.get('consent_imaging', 0) if existing else False),
+        consent_ai_analysis=body.consent_ai_analysis if body.consent_ai_analysis is not None else (existing.get('consent_ai_analysis', 1) if existing else True),
+        consent_research=body.consent_research if body.consent_research is not None else (existing.get('consent_research', 0) if existing else False),
+        updated_by=user_id
+    )
+    
+    auth_engine.set_consent(consent)
+    
+    log_access_attempt(
+        user_id=user_id, role=user_role, action="update_consent",
+        patient_id=body.patient_id, status="granted",
+        data_type="demographics"
+    )
+    
+    return {
+        "status": "updated",
+        "patient_id": body.patient_id,
+        "consent_genetic": consent.consent_genetic,
+        "consent_imaging": consent.consent_imaging,
+        "consent_ai_analysis": consent.consent_ai_analysis,
+        "consent_research": consent.consent_research
+    }
+
+# -----------------------------------------------------------------------------
+# AUTHORIZATION CHECK ENDPOINT
+# -----------------------------------------------------------------------------
+
+class AuthCheckRequest(BaseModel):
+    action: str
+    patient_id: Optional[str] = None
+    encounter_id: Optional[str] = None
+    purpose: str = "treatment"
+
+@app.post("/auth/check")
+async def check_authorization(
+    body: AuthCheckRequest,
+    user_role: str = Header(default="doctor", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """
+    Check if current user is authorized for an action.
+    Does not grant access, just checks.
+    """
+    role = Role(user_role) if user_role in [r.value for r in Role] else Role.PATIENT
+    purpose = AuthPurpose(body.purpose) if body.purpose in [p.value for p in AuthPurpose] else AuthPurpose.TREATMENT
+    
+    auth_request = AuthorizationRequest(
+        user_id=user_id,
+        role=role,
+        action=body.action,
+        patient_id=body.patient_id,
+        encounter_id=body.encounter_id,
+        purpose=purpose
+    )
+    
+    result = auth_engine.authorize(auth_request)
+    
+    return {
+        "authorized": result.granted,
+        "reason": result.reason,
+        "requires_encounter": result.requires_encounter,
+        "requires_consent": result.requires_consent,
+        "break_glass_available": result.break_glass_available,
+        "audit_id": result.audit_id
+    }
+
+# -----------------------------------------------------------------------------
+# AUDIT TRAIL ENDPOINTS
+# -----------------------------------------------------------------------------
+
+@app.get("/auth/audit/patient/{patient_id}")
+async def get_patient_audit_trail(
+    patient_id: str,
+    limit: int = 100,
+    user_role: str = Header(default="doctor", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """
+    Get audit trail for a patient.
+    Patients can see who accessed their data.
+    """
+    role = Role(user_role) if user_role in [r.value for r in Role] else Role.PATIENT
+    
+    # Patients can only see their own audit trail
+    if role == Role.PATIENT and user_id != patient_id:
+        raise HTTPException(status_code=403, detail="Can only view your own audit trail")
+    
+    # Researchers cannot access patient audit trails
+    if role == Role.RESEARCHER:
+        raise HTTPException(status_code=403, detail="Researchers cannot access patient data")
+    
+    audit_trail = auth_engine.get_patient_audit_trail(patient_id, limit)
+    
+    return {
+        "patient_id": patient_id,
+        "audit_trail": audit_trail,
+        "total": len(audit_trail)
+    }
+
+@app.get("/auth/audit/user/{target_user_id}")
+async def get_user_audit_trail(
+    target_user_id: str,
+    limit: int = 100,
+    user_role: str = Header(default="admin", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """Get audit trail for a specific user (admin only)"""
+    role = Role(user_role) if user_role in [r.value for r in Role] else Role.PATIENT
+    
+    # Only admins can view other users' audit trails
+    if role != Role.ADMIN and user_id != target_user_id:
+        raise HTTPException(status_code=403, detail="Only admins can view other users' audit trails")
+    
+    audit_trail = auth_engine.get_user_audit_trail(target_user_id, limit)
+    
+    return {
+        "user_id": target_user_id,
+        "audit_trail": audit_trail,
+        "total": len(audit_trail)
+    }
+
+@app.get("/auth/audit/break-glass")
+async def get_break_glass_events(
+    limit: int = 100,
+    user_role: str = Header(default="admin", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """Get all break-glass events (admin only)"""
+    role = Role(user_role) if user_role in [r.value for r in Role] else Role.PATIENT
+    
+    if role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admins can view break-glass events")
+    
+    events = auth_engine.get_break_glass_events(limit)
+    
+    return {
+        "break_glass_events": events,
+        "total": len(events),
+        "warning": "Review these events for potential misuse"
+    }
+
+# -----------------------------------------------------------------------------
+# STAFF USER MANAGEMENT (Admin only)
+# -----------------------------------------------------------------------------
+
+class StaffCreateRequest(BaseModel):
+    username: str
+    role: str
+    department: Optional[str] = None
+
+@app.get("/auth/staff")
+async def list_staff_users(
+    user_role: str = Header(default="admin", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """List all staff users (admin only)"""
+    role = Role(user_role) if user_role in [r.value for r in Role] else Role.PATIENT
+    
+    if role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admins can list staff users")
+    
+    # Get all staff users from auth database
+    import sqlite3
+    conn = sqlite3.connect(auth_engine.db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, username, role, department, is_active, created_at FROM staff_users")
+    users = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return {"staff_users": users, "total": len(users)}
+
+@app.post("/auth/staff")
+async def create_staff_user(
+    body: StaffCreateRequest,
+    user_role: str = Header(default="admin", alias="X-User-Role"),
+    user_id: str = Header(default="anonymous", alias="X-User-ID")
+):
+    """Create a new staff user (admin only)"""
+    role = Role(user_role) if user_role in [r.value for r in Role] else Role.PATIENT
+    
+    if role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admins can create staff users")
+    
+    # Validate role
+    try:
+        staff_role = Role(body.role)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid role: {body.role}")
+    
+    new_user = StaffUser(
+        user_id=f"{body.role}_{uuid.uuid4().hex[:6].upper()}",
+        username=body.username,
+        role=staff_role,
+        department=body.department,
+        created_by=user_id
+    )
+    
+    success = auth_engine.create_user(new_user, user_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    log_access_attempt(
+        user_id=user_id, role=user_role, action="create_staff_user",
+        status="granted", reason=f"Created user {body.username}"
+    )
+    
+    return {
+        "status": "created",
+        "user_id": new_user.user_id,
+        "username": new_user.username,
+        "role": new_user.role.value,
+        "department": new_user.department
+    }
+
+# -----------------------------------------------------------------------------
+# ROLE PERMISSIONS INFO
+# -----------------------------------------------------------------------------
+
+@app.get("/auth/permissions")
+async def get_role_permissions(
+    user_role: str = Header(default="doctor", alias="X-User-Role")
+):
+    """Get permissions for the current role"""
+    role = Role(user_role) if user_role in [r.value for r in Role] else Role.PATIENT
+    permissions = ROLE_PERMISSIONS.get(role, set())
+    
+    return {
+        "role": role.value,
+        "permissions": [p.value for p in permissions],
+        "can_create_encounter": role in [Role.DOCTOR, Role.NURSE, Role.ADMIN],
+        "can_use_break_glass": Permission.BREAK_GLASS in permissions,
+        "can_access_genetics": Permission.GENETICS_READ in permissions,
+        "can_run_predictions": Permission.PREDICTION_RUN in permissions,
+        "can_manage_staff": Permission.STAFF_MANAGE in permissions
+    }
 
 
 if __name__ == "__main__":
