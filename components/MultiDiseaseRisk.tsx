@@ -223,7 +223,7 @@ export default function MultiDiseaseRisk({
     if (!patientId) return;
 
     try {
-      await fetch(`${API_BASE}/patient/save-clinical-data`, {
+      const response = await fetch(`${API_BASE}/patient/save-clinical-data`, {
         method: 'POST',
         headers: getAuthHeaders('application/json'),
         body: JSON.stringify({
@@ -235,8 +235,15 @@ export default function MultiDiseaseRisk({
           user_role: userRole,
         }),
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[CLINICAL DATA] Save failed:', response.status, errorData);
+      } else {
+        console.log('[CLINICAL DATA] Saved successfully for patient:', patientId);
+      }
     } catch (err) {
-      console.error('Failed to save patient data:', err);
+      console.error('[CLINICAL DATA] Failed to save patient data:', err);
     }
   };
   const [error, setError] = useState<string | null>(null);
