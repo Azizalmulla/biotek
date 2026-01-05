@@ -16,6 +16,7 @@ import MultiDiseaseRisk from '@/components/MultiDiseaseRisk';
 import AdvancedMedicalImaging from '@/components/AdvancedMedicalImaging';
 import DataExchange from '@/components/DataExchange';
 import EncounterTimeline from '@/components/EncounterTimeline';
+import ProgressionSimulator from '@/components/ProgressionSimulator';
 
 const API_BASE = 'https://biotek-production.up.railway.app';
 
@@ -1276,6 +1277,21 @@ export default function PlatformPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Disease Progression Simulator */}
+                  {multiDiseaseData?.predictions && (() => {
+                    const topDisease: any = Object.values(multiDiseaseData.predictions)
+                      .sort((a: any, b: any) => b.risk_score - a.risk_score)[0];
+                    return (
+                      <ProgressionSimulator
+                        patientData={multiDiseaseData?.input_data}
+                        diseaseId={topDisease?.disease_id || 'type2_diabetes'}
+                        diseaseName={topDisease?.name || 'Type 2 Diabetes'}
+                        currentRisk={topDisease?.risk_percentage || 30}
+                        apiBase={API_BASE}
+                      />
+                    );
+                  })()}
 
                   {/* AI Clinical Reasoning */}
                   <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8 border border-black/10">
