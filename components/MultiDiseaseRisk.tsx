@@ -676,7 +676,19 @@ export default function MultiDiseaseRisk({
 
   // NEW: Get display label - prefer severity_label, fallback to risk_category
   const getDisplayLabel = (disease: DiseaseRisk): string => {
-    return disease.severity_label || disease.risk_category;
+    const baseLabel = disease.severity_label || disease.risk_category;
+
+    if (baseLabel === 'ELEVATED RISK') {
+      const absRisk = disease.risk_percentage || 0;
+      const rr = disease.calibration?.relative_risk;
+
+      // Avoid alarming labels for low absolute probabilities (common in cancers)
+      if (absRisk < 10 && (rr === undefined || rr >= 1.2)) {
+        return 'ABOVE AVERAGE';
+      }
+    }
+
+    return baseLabel;
   };
 
   const getRiskColor = (category: string) => {
@@ -685,6 +697,7 @@ export default function MultiDiseaseRisk({
       case 'DIAGNOSED': return 'from-purple-600 to-purple-700';
       case 'BORDERLINE': return 'from-amber-500 to-amber-600';
       case 'ELEVATED RISK': return 'from-red-500 to-red-600';
+      case 'ABOVE AVERAGE': return 'from-amber-500 to-amber-600';
       case 'MODERATE RISK': return 'from-amber-500 to-orange-500';
       case 'LOW RISK': return 'from-emerald-500 to-green-600';
       case 'MINIMAL RISK': return 'from-stone-500 to-stone-600';
@@ -703,6 +716,7 @@ export default function MultiDiseaseRisk({
       case 'DIAGNOSED': return 'bg-purple-50 border-purple-300';
       case 'BORDERLINE': return 'bg-amber-50 border-amber-300';
       case 'ELEVATED RISK': return 'bg-red-50 border-red-200';
+      case 'ABOVE AVERAGE': return 'bg-amber-50 border-amber-200';
       case 'MODERATE RISK': return 'bg-amber-50 border-amber-200';
       case 'LOW RISK': return 'bg-emerald-50 border-emerald-200';
       case 'MINIMAL RISK': return 'bg-stone-50 border-stone-200';
