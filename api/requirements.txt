@@ -21,6 +21,7 @@ sqlalchemy==2.0.25
 # Authentication
 bcrypt==4.1.2
 python-jose[cryptography]==3.3.0
+cryptography==42.0.2
 # 2FA
 pyotp==2.9.0
 qrcode[pil]==7.4.2

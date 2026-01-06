@@ -9,6 +9,7 @@ import hashlib
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from enum import Enum
+from auth import encrypt_sensitive_data, decrypt_sensitive_data
 
 class ExchangeStatus(str, Enum):
     """Status of data exchange request"""
@@ -39,41 +40,34 @@ def create_exchange_id() -> str:
 
 def encrypt_data_for_exchange(data: Dict[str, Any], recipient_key: Optional[str] = None) -> str:
     """
-    Encrypt patient data for secure transmission
-    In production, use public key encryption (RSA, etc.)
+    Encrypt patient data for secure transmission using AES-256-GCM
     
     Args:
         data: Patient data to encrypt
-        recipient_key: Recipient's public key
+        recipient_key: Recipient's public key (reserved for future RSA hybrid)
         
     Returns:
         Encrypted data (base64 encoded)
     """
-    import base64
-    
-    # In production: Use recipient's public key for encryption
-    # For demo: Base64 encode (NOT secure for production!)
+    # Convert dict to JSON string and encrypt with AES-256-GCM
     json_data = json.dumps(data, indent=2)
-    encrypted = base64.b64encode(json_data.encode()).decode()
+    encrypted = encrypt_sensitive_data(json_data)
     
     return encrypted
 
 def decrypt_received_data(encrypted_data: str, private_key: Optional[str] = None) -> Dict[str, Any]:
     """
-    Decrypt received patient data
+    Decrypt received patient data using AES-256-GCM
     
     Args:
         encrypted_data: Encrypted data string
-        private_key: Institution's private key
+        private_key: Institution's private key (reserved for future RSA hybrid)
         
     Returns:
         Decrypted patient data
     """
-    import base64
-    
-    # In production: Use private key to decrypt
-    # For demo: Base64 decode
-    decrypted = base64.b64decode(encrypted_data.encode()).decode()
+    # Decrypt with AES-256-GCM and parse JSON
+    decrypted = decrypt_sensitive_data(encrypted_data)
     data = json.loads(decrypted)
     
     return data
